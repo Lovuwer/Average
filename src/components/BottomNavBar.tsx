@@ -103,7 +103,7 @@ const styles = StyleSheet.create({
     top: BAR_PADDING,
     left: BAR_PADDING,
     width: TAB_WIDTH,
-    height: '100%',
+    height: 50,
     backgroundColor: `rgba(255,255,255,0.1)`,
     borderRadius: 20,
   },

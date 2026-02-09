@@ -6,7 +6,9 @@
     "android": "react-native run-android",
     "ios": "react-native run-ios",
     "start": "react-native start",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "build:android:release": "cd android && ./gradlew assembleRelease",
+    "build:ios:release": "cd ios && xcodebuild -workspace Average.xcworkspace -scheme Average -configuration Release -sdk iphoneos archive"
   },
   "dependencies": {
     "@react-navigation/bottom-tabs": "^7.2.0",

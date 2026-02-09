@@ -1,30 +1,31 @@
 import { Platform } from 'react-native';
+import { RootDetector } from './RootDetector';
+import { DebugDetector } from './DebugDetector';
+import { EmulatorDetector } from './EmulatorDetector';
+import { IntegrityChecker } from './IntegrityChecker';
 
 interface SecurityResult {
   safe: boolean;
   reasons: string[];
 }
 
+/**
+ * SecurityGate orchestrates ALL security checks on app launch.
+ * In production, if any check fails: show error and exit app.
+ */
 export class SecurityGate {
   static check(): SecurityResult {
     const reasons: string[] = [];
 
     // Check for debug mode
-    if (__DEV__) {
-      reasons.push('App is running in development mode');
-    }
-
-    // Platform-specific checks will use react-native-device-info at runtime
-    // These are placeholder checks that work without native modules during dev
-    if (Platform.OS === 'android' || Platform.OS === 'ios') {
-      // Emulator/simulator detection would use DeviceInfo.isEmulator()
-      // Root/jailbreak detection would use DeviceInfo.isRooted() (Android)
-      // These require native modules and are checked at runtime
+    const debugResult = DebugDetector.check();
+    if (debugResult.detected) {
+      reasons.push(...debugResult.indicators);
     }
 
     // In production, only fail if there are non-dev reasons
     const productionReasons = reasons.filter(
-      (r) => r !== 'App is running in development mode',
+      (r) => !r.includes('development mode'),
     );
 
     return {
@@ -36,19 +37,32 @@ export class SecurityGate {
   static async checkAsync(): Promise<SecurityResult> {
     const reasons: string[] = [];
 
-    try {
-      // Dynamic import to avoid crashes when native modules aren't linked
-      const DeviceInfo = require('react-native-device-info');
+    // Layer 1: Root/Jailbreak detection
+    const rootResult = await RootDetector.check();
+    if (rootResult.detected) {
+      reasons.push(...rootResult.indicators);
+    }
 
-      const isEmulator = await DeviceInfo.isEmulator();
-      if (isEmulator) {
-        reasons.push('Running on emulator/simulator');
-      }
-    } catch {
-      // DeviceInfo not available, skip these checks
+    // Layer 2: Emulator detection
+    const emulatorResult = await EmulatorDetector.check();
+    if (emulatorResult.detected) {
+      reasons.push(...emulatorResult.indicators);
+    }
+
+    // Layer 3: Runtime integrity
+    const integrityResult = await IntegrityChecker.check();
+    if (!integrityResult.valid) {
+      reasons.push(...integrityResult.reasons);
+    }
+
+    // Layer 4: Debug detection (sync)
+    const debugResult = DebugDetector.check();
+    if (debugResult.detected) {
+      reasons.push(...debugResult.indicators);
     }
 
     const syncResult = this.check();
+
     return {
       safe: syncResult.safe && reasons.length === 0,
       reasons: [...syncResult.reasons, ...reasons],

@@ -78,45 +78,246 @@
 - `AuthService.ts` — login, register, refreshToken, logout, isAuthenticated methods
 - `TokenManager.ts` — secure token storage using react-native-encrypted-storage (get/set/clear/has tokens)
 - `ApiClient.ts` — Axios instance with base URL config, request interceptor for auth headers, response interceptor for auto-refresh on 401, retry logic
-- `SecurityGate.ts` — sync and async security checks (dev mode detection, emulator detection via DeviceInfo, root/jailbreak detection placeholder)
+- `SecurityGate.ts` — orchestrates all security checks (root, emulator, debug, integrity)
 - `useAuthStore.ts` — Zustand store with user, isAuthenticated, isLoading, error state + login, register, logout, checkAuth actions
 - `LoginScreen.tsx` — dark themed, glassmorphic card container, email + password inputs, login button, error display, loading states, link to Register
 - `RegisterScreen.tsx` — dark themed, glassmorphic card container, display name + email + password inputs, register button, error display, loading states, link back to Login
 - `SplashScreen.tsx` — "Average" logo centered, runs SecurityGate checks, checks auth state, auto-navigates to Login or Dashboard
 
-**Files created:**
-- `src/services/api/ApiClient.ts`
-- `src/services/auth/AuthService.ts`
-- `src/services/auth/TokenManager.ts`
-- `src/services/security/SecurityGate.ts`
-- `src/store/useAuthStore.ts`
+---
+
+## TASK 2 — GPS/Speed Core + Full UI (Liquid Glass + Bottom Nav) + Dashboard
+
+### Status: COMPLETE
 
 ---
 
-### What the NEXT agent (Task 2) should know:
+### Part A: GPS Service & Speed Engine
 
-1. **React Native dependencies are declared but NOT installed** — run `npm install` in the root directory first. Native modules will need `pod install` for iOS.
-2. **Backend dependencies ARE installed** and compile cleanly. `backend/node_modules/` is gitignored.
-3. **Navigation structure**: Stack(Splash → Login → Register → Main(BottomTabs: Dashboard, Stats, History, Settings))
-4. **Auth flow**: SplashScreen checks SecurityGate → checks auth → navigates to Login or Main
-5. **API client** is in `src/services/api/ApiClient.ts` — uses `__DEV__` to switch between localhost and production URL
-6. **Zustand store** pattern is established in `src/store/useAuthStore.ts`
-7. **Glassmorphic card** containers on Login/Register use opacity-based backgrounds as placeholders — Task 2 should implement full Liquid Glass effects using `@shopify/react-native-skia`
-8. **Placeholder screens** (Dashboard, Stats, History, Settings) show centered screen name text on dark background — ready for Task 2 to implement full UI
+**Files created:**
+- `src/services/gps/GPSService.ts` — wraps react-native-geolocation-service, watchPosition with high accuracy config, requestPermissions()
+- `src/services/gps/KalmanFilter.ts` — 1D Kalman filter for GPS speed smoothing (processNoise, measurementNoise, estimatedError)
+- `src/services/gps/HaversineCalculator.ts` — distance + speed calculation using Haversine formula as fallback
+- `src/services/gps/SpeedEngine.ts` — aggregates GPS + Kalman + Haversine, maintains trip state (speed, avg, max, distance, duration, history), unit conversion helpers
+- `src/services/trip/TripManager.ts` — trip lifecycle (start/stop/save), in-memory store with sync to backend
+- `src/store/useSpeedStore.ts` — Zustand store (currentSpeed, avgSpeed, maxSpeed, distance, duration, speedHistory, isTracking, isPaused, speedUnit)
+- `src/hooks/useSpeed.ts` — custom hook connecting SpeedEngine to store, formatted values, lifecycle management
 
-### Environment variables required:
-- **Backend** (see `backend/.env.example`):
-  - `DATABASE_URL` — PostgreSQL connection string
-  - `JWT_SECRET` — Secret key for JWT signing
-  - `JWT_ACCESS_EXPIRY` — Access token expiry (default: 15m)
-  - `JWT_REFRESH_EXPIRY` — Refresh token expiry (default: 7d)
-  - `PORT` — Server port (default: 3000)
-  - `HOST` — Server host (default: 0.0.0.0)
-  - `CORS_ORIGIN` — CORS origin (default: *)
+### Part B: Liquid Glass UI Components
 
-### Setup steps:
-1. `cd backend && npm install && npx prisma generate`
-2. Set up PostgreSQL and add `DATABASE_URL` to `backend/.env`
-3. `npx prisma migrate dev` to create database tables
-4. `npm run dev` to start the backend server
-5. In project root: `npm install` then `npx react-native run-android` or `npx react-native run-ios`
+**Files created:**
+- `src/theme/glassMorphism.ts` — GLASS constants (blur, saturation, opacity, cornerRadius) + COLORS (dark theme, speed colors) + SPACING
+- `src/components/LiquidGlassCard.tsx` — glassmorphic card with animated press effect (scale 0.98), highlight overlay, configurable cornerRadius/padding/tintColor
+- `src/components/LiquidGlassButton.tsx` — pill-shaped glass button with press animation, primary/secondary variants, loading state
+
+### Part C: Bottom Navigation Bar
+
+**Files created:**
+- `src/components/BottomNavBar.tsx` — floating pill-shaped nav bar with animated active indicator (reanimated withTiming), 4 tabs (🏠📊🕐⚙️), glassmorphic styling
+
+**Modified:**
+- `src/navigation/AppNavigator.tsx` — integrated BottomNavBar as custom tabBar
+
+### Part D: Dashboard & Screens
+
+**Files created:**
+- `src/components/SpeedDisplay.tsx` — large speed number (120px), color-coded (green/yellow/red), tappable unit label
+- `src/components/SpeedGauge.tsx` — circular arc gauge behind speed number, progress-based fill
+
+**Modified:**
+- `src/screens/DashboardScreen.tsx` — full layout: timer, gauge + speed display, avg/max/distance metric cards (LiquidGlassCard), START/PAUSE/STOP buttons (LiquidGlassButton)
+- `src/screens/StatsScreen.tsx` — sparkline speed chart, total trips/distance/avg speed stats in glass cards
+- `src/screens/HistoryScreen.tsx` — FlatList of trips with date/duration/avg/max/distance, glass card per trip
+- `src/screens/SettingsScreen.tsx` — speed unit toggle, HUD mode switch, account info, logout button, about section
+
+---
+
+## TASK 3 — Native Car Interfaces + Anti-Cracking Suite + Build Config + Documentation
+
+### Status: COMPLETE
+
+---
+
+### Part A: Android Auto Integration
+
+**Files created:**
+- `android/app/src/main/java/com/average/auto/AverageCarAppService.kt` — CarAppService entry point
+- `android/app/src/main/java/com/average/auto/AverageSession.kt` — Session returning SpeedScreen
+- `android/app/src/main/java/com/average/auto/SpeedScreen.kt` — PaneTemplate displaying speed/avg/max/distance, refreshes every 1s
+- `android/app/src/main/java/com/average/auto/SpeedDataBridge.kt` — shared data object for RN→Auto data flow
+- `android/app/src/main/java/com/average/auto/AutoBridge.kt` — React Native native module (@ReactMethod updateSpeed)
+- `android/app/src/main/res/xml/automotive_app_desc.xml` — Android Auto app descriptor
+
+**Modified:**
+- `android/app/src/main/AndroidManifest.xml` — added car application meta-data and CarAppService declaration
+
+### Part B: Apple CarPlay Integration
+
+**Files created:**
+- `ios/Average/CarPlay/CarPlaySceneDelegate.swift` — CPTemplateApplicationSceneDelegate, manages CarPlay lifecycle
+- `ios/Average/CarPlay/SpeedTemplate.swift` — CPInformationTemplate with speed/avg/max/distance items
+- `ios/Average/CarPlay/CarPlayBridge.swift` — RN native module bridging speed data to CarPlay via NotificationCenter
+- `ios/Average/CarPlay/CarPlayBridge.m` — ObjC bridge for RCT_EXTERN_MODULE
+- `src/services/carplay/CarIntegration.ts` — cross-platform service sending speed data to AutoBridge/CarPlayBridge
+
+**Modified:**
+- `ios/Average/Info.plist` — added CarPlay scene configuration (CPTemplateApplicationSceneSessionRoleApplication)
+
+### Part C: Anti-Cracking Suite (7 Layers)
+
+**Files created:**
+- `src/services/security/IntegrityChecker.ts` — Layer 4: runtime bundle ID verification
+- `src/services/security/SSLPinning.ts` — Layer 5: SSL certificate pinning config with primary + backup pins
+- `src/services/security/RootDetector.ts` — Layer 6a: root/jailbreak detection (test-keys, build tags)
+- `src/services/security/DebugDetector.ts` — Layer 6b: debugger detection (__DEV__ check)
+- `src/services/security/EmulatorDetector.ts` — Layer 6c: emulator detection via DeviceInfo.isEmulator()
+- `src/services/security/RequestSigner.ts` — Layer 7: HMAC request signing with nonce + timestamp
+
+**Modified:**
+- `src/services/security/SecurityGate.ts` — updated to orchestrate all security layers (root→emulator→integrity→debug)
+
+### Part D: Build Configuration
+
+**Files created:**
+- `android/app/proguard-rules.pro` — ProGuard rules for RN, Hermes, native modules, debug log stripping
+
+**Modified:**
+- `package.json` — added build:android:release and build:ios:release scripts
+
+### Part E: Documentation
+
+**Files created:**
+- `DOCUMENTATION.md` — comprehensive docs (overview, architecture, setup, Railway deployment, Android Auto, CarPlay, security, troubleshooting)
+- `docs/API_REFERENCE.md` — full API endpoint documentation with request/response examples
+- `docs/SECURITY.md` — security architecture details for all 7 layers
+- `docs/DEPLOYMENT.md` — Railway, Play Store, and App Store deployment guides
+
+---
+
+## Complete File Manifest
+
+### Root
+```
+App.tsx, index.js, package.json, tsconfig.json, app.json
+babel.config.js, metro.config.js, .gitignore
+DOCUMENTATION.md, whathasbeenimplemented.md
+```
+
+### src/navigation/
+```
+AppNavigator.tsx
+```
+
+### src/screens/
+```
+SplashScreen.tsx, LoginScreen.tsx, RegisterScreen.tsx
+DashboardScreen.tsx, StatsScreen.tsx, HistoryScreen.tsx, SettingsScreen.tsx
+```
+
+### src/components/
+```
+LiquidGlassCard.tsx, LiquidGlassButton.tsx
+BottomNavBar.tsx, SpeedDisplay.tsx, SpeedGauge.tsx
+```
+
+### src/services/
+```
+api/ApiClient.ts
+auth/AuthService.ts, auth/TokenManager.ts
+gps/GPSService.ts, gps/KalmanFilter.ts, gps/HaversineCalculator.ts, gps/SpeedEngine.ts
+trip/TripManager.ts
+carplay/CarIntegration.ts
+security/SecurityGate.ts, security/IntegrityChecker.ts, security/SSLPinning.ts
+security/RootDetector.ts, security/DebugDetector.ts, security/EmulatorDetector.ts
+security/RequestSigner.ts
+```
+
+### src/store/
+```
+useAuthStore.ts, useSpeedStore.ts
+```
+
+### src/hooks/
+```
+useSpeed.ts
+```
+
+### src/theme/
+```
+glassMorphism.ts
+```
+
+### backend/
+```
+package.json, tsconfig.json, Dockerfile, .env.example, .dockerignore
+prisma/schema.prisma
+src/server.ts, src/prisma.ts
+src/routes/auth.ts, src/routes/trips.ts, src/routes/license.ts
+src/middleware/auth.ts
+src/schemas/validation.ts
+```
+
+### android/
+```
+app/src/main/AndroidManifest.xml
+app/src/main/java/com/average/auto/AverageCarAppService.kt
+app/src/main/java/com/average/auto/AverageSession.kt
+app/src/main/java/com/average/auto/SpeedScreen.kt
+app/src/main/java/com/average/auto/SpeedDataBridge.kt
+app/src/main/java/com/average/auto/AutoBridge.kt
+app/src/main/res/xml/automotive_app_desc.xml
+app/proguard-rules.pro
+```
+
+### ios/
+```
+Average/Info.plist
+Average/CarPlay/CarPlaySceneDelegate.swift
+Average/CarPlay/SpeedTemplate.swift
+Average/CarPlay/CarPlayBridge.swift
+Average/CarPlay/CarPlayBridge.m
+```
+
+### docs/
+```
+API_REFERENCE.md, SECURITY.md, DEPLOYMENT.md
+```
+
+---
+
+## State Management Shapes
+
+### useAuthStore
+```typescript
+{ user: User | null, isAuthenticated: boolean, isLoading: boolean, error: string | null }
+Actions: login, register, logout, checkAuth, clearError
+```
+
+### useSpeedStore
+```typescript
+{ currentSpeed, averageSpeed, maxSpeed, distance, duration, speedHistory,
+  isTracking, isPaused, speedUnit: 'kmh' | 'mph' }
+Actions: updateSpeed, setTracking, setPaused, toggleUnit, reset
+```
+
+---
+
+## Environment Variables
+- `DATABASE_URL` — PostgreSQL connection string
+- `JWT_SECRET` — JWT signing secret
+- `JWT_ACCESS_EXPIRY` — default: 15m
+- `JWT_REFRESH_EXPIRY` — default: 7d
+- `PORT` — default: 3000
+- `HOST` — default: 0.0.0.0
+- `CORS_ORIGIN` — default: *
+
+## Setup Steps
+1. `npm install` in root
+2. `cd ios && pod install` for iOS
+3. `cd backend && npm install && npx prisma generate`
+4. Set up PostgreSQL, add `DATABASE_URL` to `backend/.env`
+5. `cd backend && npx prisma migrate dev`
+6. `cd backend && npm run dev` for backend
+7. `npm start` for Metro, then `npm run android` or `npm run ios`
+
+## ALL TASKS COMPLETE ✅
