@@ -9,6 +9,7 @@ import DashboardScreen from '../screens/DashboardScreen';
 import StatsScreen from '../screens/StatsScreen';
 import HistoryScreen from '../screens/HistoryScreen';
 import SettingsScreen from '../screens/SettingsScreen';
+import BottomNavBar from '../components/BottomNavBar';
 
 export type RootStackParamList = {
   Splash: undefined;
@@ -30,14 +31,9 @@ const Tab = createBottomTabNavigator<MainTabParamList>();
 const MainTabs: React.FC = () => {
   return (
     <Tab.Navigator
+      tabBar={(props) => <BottomNavBar {...props} />}
       screenOptions={{
         headerShown: false,
-        tabBarStyle: {
-          backgroundColor: '#1a1a2e',
-          borderTopColor: '#16213e',
-        },
-        tabBarActiveTintColor: '#e94560',
-        tabBarInactiveTintColor: '#a0a0a0',
       }}>
       <Tab.Screen name="Dashboard" component={DashboardScreen} />
       <Tab.Screen name="Stats" component={StatsScreen} />
