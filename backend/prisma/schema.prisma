@@ -1,0 +1,70 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id                 String              @id @default(uuid())
+  email              String              @unique
+  passwordHash       String
+  displayName        String?
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+  sessions           Session[]
+  trips              Trip[]
+  deviceFingerprints DeviceFingerprint[]
+  licenseKey         LicenseKey?
+}
+
+model Session {
+  id           String   @id @default(uuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id])
+  refreshToken String   @unique
+  deviceId     String
+  platform     String
+  expiresAt    DateTime
+  createdAt    DateTime @default(now())
+}
+
+model Trip {
+  id        String    @id @default(uuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id])
+  startTime DateTime
+  endTime   DateTime?
+  distance  Float
+  avgSpeed  Float
+  maxSpeed  Float
+  duration  Int
+  speedUnit String    @default("kmh")
+  createdAt DateTime  @default(now())
+}
+
+model DeviceFingerprint {
+  id         String   @id @default(uuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id])
+  deviceId   String   @unique
+  platform   String
+  model      String
+  osVersion  String
+  appVersion String
+  lastSeen   DateTime @default(now())
+  createdAt  DateTime @default(now())
+}
+
+model LicenseKey {
+  id         String    @id @default(uuid())
+  userId     String    @unique
+  user       User      @relation(fields: [userId], references: [id])
+  key        String    @unique
+  isActive   Boolean   @default(true)
+  maxDevices Int       @default(2)
+  expiresAt  DateTime?
+  createdAt  DateTime  @default(now())
+}
