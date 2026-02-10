@@ -9,13 +9,17 @@ import DashboardScreen from '../screens/DashboardScreen';
 import StatsScreen from '../screens/StatsScreen';
 import HistoryScreen from '../screens/HistoryScreen';
 import SettingsScreen from '../screens/SettingsScreen';
+import HUDScreen from '../screens/HUDScreen';
+import LicenseScreen from '../screens/LicenseScreen';
 import BottomNavBar from '../components/BottomNavBar';
 
 export type RootStackParamList = {
   Splash: undefined;
   Login: undefined;
   Register: undefined;
+  License: undefined;
   Main: undefined;
+  HUD: undefined;
 };
 
 export type MainTabParamList = {
@@ -52,7 +56,13 @@ const AppNavigator: React.FC = () => {
       <Stack.Screen name="Splash" component={SplashScreen} />
       <Stack.Screen name="Login" component={LoginScreen} />
       <Stack.Screen name="Register" component={RegisterScreen} />
+      <Stack.Screen name="License" component={LicenseScreen} />
       <Stack.Screen name="Main" component={MainTabs} />
+      <Stack.Screen
+        name="HUD"
+        component={HUDScreen}
+        options={{ gestureEnabled: false }}
+      />
     </Stack.Navigator>
   );
 };
