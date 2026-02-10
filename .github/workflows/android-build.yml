@@ -1,0 +1,40 @@
+name: Build Android APK
+
+on:
+  workflow_dispatch: # Allows you to manually trigger the build button
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      - name: Setup Java
+        uses: actions/setup-java@v3
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+
+      - name: Install Dependencies
+        run: npm install
+
+      - name: Make Gradle Executable
+        run: cd android && chmod +x gradlew
+
+      - name: Build Debug APK
+        # We build Debug because Release requires setting up signing keys (complex on mobile)
+        run: cd android && ./gradlew assembleDebug --no-daemon
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Average-App-Debug
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+
