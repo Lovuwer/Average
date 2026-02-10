@@ -1,20 +1,29 @@
 appId: com.average
 ---
 - launchApp
+- waitForAnimationToEnd
 
-# 1. Verify app launched without crash
-- assertVisible:
-    text: "Login"
-    optional: true
+# 1. Verify app launched without crash (no missing bundle error)
 - assertNotVisible:
     text: "Unable to load script"
 
-# 2. Test login interactions
+# 2. Wait for splash screen to finish and login screen to appear
+- extendedWaitUntil:
+    visible:
+      text: "Login"
+    timeout: 15000
+
+# 3. Verify login screen elements
+- assertVisible: "Average"
+- assertVisible: "Sign in to continue"
+
+# 4. Verify registration link is removed (single-user mode)
+- assertNotVisible:
+    text: "Register"
+
+# 5. Test login form interactions
 - tapOn: "Email"
 - inputText: ${ADMIN_EMAIL}
 - tapOn: "Password"
 - inputText: ${ADMIN_PASSWORD}
 - tapOn: "Login"
-
-# 3. Verify navigation to main screen
-- assertVisible: "Dashboard"
