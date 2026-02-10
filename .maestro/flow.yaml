@@ -1,0 +1,20 @@
+appId: com.average
+---
+- launchApp
+
+# 1. Verify app launched without crash
+- assertVisible:
+    text: "Login"
+    optional: true
+- assertNotVisible:
+    text: "Unable to load script"
+
+# 2. Test login interactions
+- tapOn: "Email"
+- inputText: ${ADMIN_EMAIL}
+- tapOn: "Password"
+- inputText: ${ADMIN_PASSWORD}
+- tapOn: "Login"
+
+# 3. Verify navigation to main screen
+- assertVisible: "Dashboard"

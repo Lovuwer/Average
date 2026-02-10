@@ -53,6 +53,11 @@ fastlane/test_output
 
 # Bundle artifact
 *.jsbundle
+android/app/src/main/assets/index.android.bundle
+android/app/src/main/res/drawable-mdpi/node_modules*
+android/app/src/main/res/drawable-xhdpi/node_modules*
+android/app/src/main/res/drawable-xxhdpi/node_modules*
+android/app/src/main/res/drawable-xxxhdpi/node_modules*
 
 # CocoaPods
 ios/Pods/

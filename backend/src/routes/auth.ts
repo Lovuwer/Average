@@ -1,12 +1,6 @@
 import { FastifyInstance } from 'fastify';
-import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
-import prisma from '../prisma';
-import {
-  registerSchema,
-  loginSchema,
-  refreshSchema,
-} from '../schemas/validation';
+import { loginSchema } from '../schemas/validation';
 import { authenticate } from '../middleware/auth';
 
 export async function authRoutes(server: FastifyInstance): Promise<void> {
@@ -20,69 +14,12 @@ export async function authRoutes(server: FastifyInstance): Promise<void> {
     },
   };
 
-  // POST /auth/register
-  server.post('/register', authRateLimit, async (request, reply) => {
-    const parsed = registerSchema.safeParse(request.body);
-    if (!parsed.success) {
-      return reply.status(400).send({
-        error: 'Validation failed',
-        details: parsed.error.flatten().fieldErrors,
-      });
-    }
-
-    const { email, password, displayName } = parsed.data;
-
-    // Check if user already exists
-    const existingUser = await prisma.user.findUnique({ where: { email } });
-    if (existingUser) {
-      return reply.status(409).send({ error: 'Email already registered' });
-    }
-
-    // Hash password
-    const salt = await bcrypt.genSalt(12);
-    const passwordHash = await bcrypt.hash(password, salt);
-
-    // Create user
-    const user = await prisma.user.create({
-      data: {
-        email,
-        passwordHash,
-        displayName: displayName || null,
-      },
-    });
-
-    // Generate tokens
-    const accessToken = server.jwt.sign(
-      { userId: user.id, email: user.email },
-      { expiresIn: process.env.JWT_ACCESS_EXPIRY || '15m' },
-    );
-
-    const refreshToken = crypto.randomUUID();
-    const expiresAt = new Date();
-    expiresAt.setDate(expiresAt.getDate() + 7);
-
-    await prisma.session.create({
-      data: {
-        userId: user.id,
-        refreshToken,
-        deviceId: 'unknown',
-        platform: 'unknown',
-        expiresAt,
-      },
-    });
-
-    return reply.status(201).send({
-      accessToken,
-      refreshToken,
-      user: {
-        id: user.id,
-        email: user.email,
-        displayName: user.displayName,
-      },
-    });
+  // POST /auth/register — Registration is disabled (single-user mode)
+  server.post('/register', authRateLimit, async (_request, reply) => {
+    return reply.status(403).send({ error: 'Registration is disabled.' });
   });
 
-  // POST /auth/login
+  // POST /auth/login — Single-user mode: validate against environment variables
   server.post('/login', authRateLimit, async (request, reply) => {
     const parsed = loginSchema.safeParse(request.body);
     if (!parsed.success) {
@@ -94,92 +31,54 @@ export async function authRoutes(server: FastifyInstance): Promise<void> {
 
     const { email, password } = parsed.data;
 
-    // Find user
-    const user = await prisma.user.findUnique({ where: { email } });
-    if (!user) {
-      return reply.status(401).send({ error: 'Invalid email or password' });
+    const adminEmail = process.env.ADMIN_EMAIL;
+    const adminPassword = process.env.ADMIN_PASSWORD;
+
+    if (!adminEmail || !adminPassword) {
+      return reply.status(500).send({ error: 'Server auth configuration error' });
     }
 
-    // Verify password
-    const isValid = await bcrypt.compare(password, user.passwordHash);
-    if (!isValid) {
-      return reply.status(401).send({ error: 'Invalid email or password' });
-    }
+    if (email === adminEmail && password === adminPassword) {
+      const accessToken = server.jwt.sign(
+        { email: adminEmail, role: 'admin' },
+        { expiresIn: process.env.JWT_ACCESS_EXPIRY || '15m' },
+      );
 
-    // Generate tokens
-    const accessToken = server.jwt.sign(
-      { userId: user.id, email: user.email },
-      { expiresIn: process.env.JWT_ACCESS_EXPIRY || '15m' },
-    );
+      const refreshToken = crypto.randomUUID();
 
-    const refreshToken = crypto.randomUUID();
-    const expiresAt = new Date();
-    expiresAt.setDate(expiresAt.getDate() + 7);
-
-    await prisma.session.create({
-      data: {
-        userId: user.id,
+      return reply.send({
+        accessToken,
         refreshToken,
-        deviceId: 'unknown',
-        platform: 'unknown',
-        expiresAt,
-      },
-    });
+        user: {
+          id: 'admin',
+          email: adminEmail,
+          displayName: 'Admin',
+        },
+      });
+    }
 
-    return reply.send({
-      accessToken,
-      refreshToken,
-      user: {
-        id: user.id,
-        email: user.email,
-        displayName: user.displayName,
-      },
-    });
+    return reply.status(401).send({ error: 'Invalid credentials' });
   });
 
   // POST /auth/refresh
   server.post('/refresh', async (request, reply) => {
-    const parsed = refreshSchema.safeParse(request.body);
-    if (!parsed.success) {
-      return reply.status(400).send({
-        error: 'Validation failed',
-        details: parsed.error.flatten().fieldErrors,
-      });
+    // In single-user mode, just re-issue a token if the request has a valid refresh token format
+    const body = request.body as { refreshToken?: string };
+    if (!body?.refreshToken) {
+      return reply.status(400).send({ error: 'Refresh token is required' });
     }
 
-    const { refreshToken } = parsed.data;
-
-    // Find session
-    const session = await prisma.session.findUnique({
-      where: { refreshToken },
-      include: { user: true },
-    });
-
-    if (!session || session.expiresAt < new Date()) {
-      if (session) {
-        await prisma.session.delete({ where: { id: session.id } });
-      }
-      return reply.status(401).send({ error: 'Invalid or expired refresh token' });
+    const adminEmail = process.env.ADMIN_EMAIL;
+    if (!adminEmail) {
+      return reply.status(500).send({ error: 'Server auth configuration error' });
     }
 
-    // Rotate refresh token
-    const newRefreshToken = crypto.randomUUID();
-    const newExpiresAt = new Date();
-    newExpiresAt.setDate(newExpiresAt.getDate() + 7);
-
-    await prisma.session.update({
-      where: { id: session.id },
-      data: {
-        refreshToken: newRefreshToken,
-        expiresAt: newExpiresAt,
-      },
-    });
-
-    // Generate new access token
     const accessToken = server.jwt.sign(
-      { userId: session.user.id, email: session.user.email },
+      { email: adminEmail, role: 'admin' },
       { expiresIn: process.env.JWT_ACCESS_EXPIRY || '15m' },
     );
+
+    const newRefreshToken = crypto.randomUUID();
 
     return reply.send({
       accessToken,
@@ -192,19 +91,14 @@ export async function authRoutes(server: FastifyInstance): Promise<void> {
     '/verify',
     { preHandler: [authenticate] },
     async (request, reply) => {
-      const { userId } = request.user as { userId: string; email: string };
-
-      const user = await prisma.user.findUnique({ where: { id: userId } });
-      if (!user) {
-        return reply.status(401).send({ error: 'User not found' });
-      }
+      const { email } = request.user as { email: string };
 
       return reply.send({
         valid: true,
         user: {
-          id: user.id,
-          email: user.email,
-          displayName: user.displayName,
+          id: 'admin',
+          email,
+          displayName: 'Admin',
         },
       });
     },
@@ -214,12 +108,7 @@ export async function authRoutes(server: FastifyInstance): Promise<void> {
   server.post(
     '/logout',
     { preHandler: [authenticate] },
-    async (request, reply) => {
-      const { userId } = request.user as { userId: string };
-
-      // Delete all sessions for this user (or a specific one based on token)
-      await prisma.session.deleteMany({ where: { userId } });
-
+    async (_request, reply) => {
       return reply.send({ success: true });
     },
   );
