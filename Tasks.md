@@ -1073,3 +1073,1410 @@ After ALL tests are written and verified:
 8. Note: "Run `npm run build:verify:config` before opening Android Studio"
 9. Note: "Run `npm run build:fix:android` if Gradle build fails"
 10. Provide clear instructions for Task 5 on what's been tested and what new features need test coverage
+# COPILOT AGENT TASK 5
+## Scope: ALL Recommended Enhanced Features + Their Tests
+## Features: Kalman Filter Enhancement, HUD Mode, Speed Alerts, Biometric Login, Dark/Night Auto-Switch, Trip Export (PDF/CSV), License Key System, Offline-First Sync, Device Fingerprinting, Speed Unit Toggle Enhancement
+
+### 🚨 ANTI-HALLUCINATION PROTOCOL — READ FIRST
+Before writing ANY code, you MUST:
+1. READ `whathasbeenimplemented.md` COMPLETELY — understand everything from Tasks 1-4
+2. Pay special attention to existing test patterns from Task 4 — follow the SAME testing patterns
+3. Do NOT duplicate any existing functionality — extend what's already there
+4. WRITE into `whathasbeenimplemented.md` what you're about to do BEFORE coding
+5. For EVERY new feature you implement, also write the corresponding tests
+6. UPDATE `whathasbeenimplemented.md` when done with complete feature list and test results
+
+---
+
+### FEATURE 1: HUD (Heads-Up Display) Mode — Windshield Projection
+
+**Implementation:**
+
+1. Create `src/screens/HUDScreen.tsx`:
+   - Full black background (#000000) — critical for windshield reflection
+   - ALL content is horizontally mirrored using `transform: [{ scaleX: -1 }]`
+   - Display ONLY:
+     - Current speed (massive font, ~200px, color: lime/green #00FF41)
+     - Speed unit label (km/h or mph)
+     - Small average speed below
+   - Force LANDSCAPE orientation using `react-native-orientation-locker`:
+     ```typescript
+     import Orientation from 'react-native-orientation-locker';
+     
+     useEffect(() => {
+       Orientation.lockToLandscape();
+       KeepAwake.activate();
+       // Set max brightness
+       SystemSetting.setBrightnessForce(1.0);
+       StatusBar.setHidden(true);
+       
+       return () => {
+         Orientation.unlockAllOrientations();
+         KeepAwake.deactivate();
+         SystemSetting.setBrightnessForce(previousBrightness);
+         StatusBar.setHidden(false);
+       };
+     }, []);
+     ```
+   - Keep screen always on (`react-native-keep-awake`)
+   - Maximum screen brightness when entering HUD mode, restore previous on exit
+   - Minimal UI — no nav bar, no status bar, just speed
+   - Exit via double-tap gesture or swipe-down
+   - Speed data comes from the same `useSpeedStore` (shared state with dashboard)
+
+2. Install additional dependency: `react-native-orientation-locker`, `react-native-system-setting` (for brightness control)
+
+3. Add HUD button to `DashboardScreen.tsx`:
+   - Small icon button in top-right corner of the dashboard
+   - Icon: a windshield/projection icon
+   - On press: navigate to HUDScreen
+   - Only enabled when tracking is active
+
+4. Add HUD toggle to `SettingsScreen.tsx`:
+   - "Auto-HUD on drive start" toggle
+   - Brightness level slider for HUD mode
+   - Color picker for speed text (green, white, cyan, red)
+
+**Tests for HUD Mode:**
+
+5. Create `__tests__/screens/HUDScreen.test.tsx`:
+   ```typescript
+   // ✅ Renders with black background (#000000)
+   // ✅ Speed text has scaleX: -1 transform (mirrored)
+   // ✅ Locks orientation to landscape on mount
+   // ✅ Unlocks orientation on unmount
+   // ✅ Activates keep-awake on mount
+   // ✅ Deactivates keep-awake on unmount
+   // ✅ Hides status bar on mount
+   // ✅ Shows status bar on unmount
+   // ✅ Displays current speed from useSpeedStore
+   // ✅ Displays correct speed unit
+   // ✅ Speed text uses large font (≥150px)
+   // ✅ Speed text color is configurable (default: #00FF41)
+   // ✅ Double-tap gesture triggers exit
+   // ✅ Navigates back to dashboard on exit
+   // ✅ Sets brightness to max on mount
+   // ✅ Restores previous brightness on unmount
+   // ✅ Only shows speed and unit — no nav bar, no other UI
+   // ✅ Average speed shown in smaller text below main speed
+   ```
+
+---
+
+### FEATURE 2: Speed Alerts — Configurable Speed Limit Warnings
+
+**Implementation:**
+
+6. Create `src/services/alerts/SpeedAlertService.ts`:
+   ```typescript
+   interface SpeedAlertConfig {
+     enabled: boolean;
+     speedLimit: number;       // in current unit (km/h or mph)
+     warningThreshold: number; // percentage before limit (e.g., 90% = warn at 90 km/h if limit is 100)
+     alertType: 'vibration' | 'sound' | 'both';
+     cooldownSeconds: number;  // minimum time between alerts (prevent spam)
+   }
+   
+   class SpeedAlertService {
+     private lastAlertTime: number = 0;
+     private isWarning: boolean = false;
+     
+     checkSpeed(currentSpeed: number, config: SpeedAlertConfig): AlertResult {
+       // Returns: { shouldAlert: boolean, level: 'warning' | 'exceeded' | 'none' }
+       // Warning: speed ≥ warningThreshold% of limit
+       // Exceeded: speed ≥ limit
+       // Respects cooldown to prevent alert spam
+     }
+     
+     triggerAlert(level: 'warning' | 'exceeded', type: AlertType): void {
+       // Vibration: short pulse for warning, long pulse for exceeded
+       // Sound: gentle beep for warning, insistent beep for exceeded
+       // Both: vibration + sound
+     }
+   }
+   ```
+
+7. Create `src/services/alerts/SoundManager.ts`:
+   - Preload alert sounds on app start
+   - Warning sound: gentle double-beep
+   - Exceeded sound: urgent triple-beep
+   - Use `react-native-sound` for audio playback
+   - Respect system volume settings
+
+8. Add to `useSettingsStore.ts`:
+   ```typescript
+   speedAlert: {
+     enabled: boolean;
+     speedLimit: number;
+     warningThreshold: number; // 0.85 to 0.95
+     alertType: 'vibration' | 'sound' | 'both';
+     cooldownSeconds: number;
+   }
+   ```
+
+9. Integrate into `SpeedEngine.ts`:
+   - After each speed update, call `SpeedAlertService.checkSpeed()`
+   - If alert triggered, call `triggerAlert()`
+   - Visual indicator on DashboardScreen: speed display border turns yellow (warning) or flashes red (exceeded)
+
+10. Add Speed Alert settings to `SettingsScreen.tsx`:
+    - Toggle: Enable/Disable speed alerts
+    - Slider: Set speed limit (20-300 km/h or 12-186 mph)
+    - Slider: Warning threshold (85%-95%)
+    - Radio: Alert type (vibration / sound / both)
+    - Slider: Cooldown (5-60 seconds)
+
+**Tests for Speed Alerts:**
+
+11. Create `__tests__/unit/services/alerts/SpeedAlertService.test.ts`:
+    ```typescript
+    // ✅ Returns 'none' when speed is below warning threshold
+    // ✅ Returns 'warning' when speed ≥ warningThreshold% of limit
+    // ✅ Returns 'exceeded' when speed ≥ limit
+    // ✅ Respects cooldown period (no alert within cooldown window)
+    // ✅ Alerts resume after cooldown expires
+    // ✅ Returns 'none' when alerts are disabled
+    // ✅ Correctly handles km/h speeds
+    // ✅ Correctly handles mph speeds
+    // ✅ Edge case: speed exactly at limit → 'exceeded'
+    // ✅ Edge case: speed exactly at warning threshold → 'warning'
+    // ✅ Edge case: speed = 0 → 'none'
+    // ✅ Edge case: speed limit = 0 → always 'exceeded' (invalid config handled)
+    // ✅ triggerAlert('warning', 'vibration') → calls Vibration.vibrate with short pattern
+    // ✅ triggerAlert('exceeded', 'sound') → plays exceeded sound
+    // ✅ triggerAlert('exceeded', 'both') → plays sound AND vibrates
+    // ✅ Multiple rapid speed changes don't spam alerts
+    ```
+
+---
+
+### FEATURE 3: Biometric Login (FaceID / TouchID / Fingerprint)
+
+**Implementation:**
+
+12. Install: `react-native-biometrics`
+
+13. Create `src/services/auth/BiometricService.ts`:
+    ```typescript
+    import ReactNativeBiometrics from 'react-native-biometrics';
+    
+    class BiometricService {
+      private rnBiometrics = new ReactNativeBiometrics();
+      
+      async isAvailable(): Promise<{
+        available: boolean;
+        biometryType: 'FaceID' | 'TouchID' | 'Biometrics' | null;
+      }> {
+        const { available, biometryType } = await this.rnBiometrics.isSensorAvailable();
+        return { available, biometryType };
+      }
+      
+      async authenticate(promptMessage?: string): Promise<boolean> {
+        // Uses simplePrompt for authentication
+        // Returns true on success, false on cancel/failure
+        // promptMessage defaults to 'Authenticate to access Average'
+      }
+      
+      async createKeys(): Promise<string> {
+        // Creates a public/private key pair
+        // Returns the public key (to send to server for verification)
+        // Used for biometric-based token generation
+      }
+      
+      async signPayload(payload: string): Promise<string> {
+        // Signs a payload with the biometric-protected private key
+        // Server verifies with stored public key
+        // This provides cryptographic proof of biometric auth
+      }
+      
+      async deleteKeys(): Promise<void> {
+        // Remove stored keys (on logout or key rotation)
+      }
+    }
+    ```
+
+14. Integrate biometric login flow:
+    - On `LoginScreen.tsx`: Add "Login with FaceID/TouchID" button below password login
+      - Only show if biometrics are available AND user has previously logged in on this device
+      - Icon changes based on biometryType (face icon for FaceID, fingerprint for TouchID/Biometrics)
+    - On first successful password login, prompt: "Enable biometric login for next time?"
+      - If yes: create biometric keys, send public key to server, store `biometricEnabled: true`
+    - On subsequent launches: if biometric is enabled, show biometric prompt immediately
+      - On success: sign a challenge nonce from server with biometric key → server validates → issue tokens
+      - On failure/cancel: fall back to password login
+
+15. Add to `SettingsScreen.tsx`:
+    - "Biometric Login" toggle
+    - Shows biometry type (FaceID / TouchID / Fingerprint)
+    - Disable → deletes keys and disables biometric auth
+
+16. Backend changes — add to `backend/src/routes/auth.ts`:
+    - `POST /auth/biometric/register` — store public key for user + device
+    - `POST /auth/biometric/challenge` — return a random nonce challenge
+    - `POST /auth/biometric/verify` — verify signed challenge with stored public key → issue tokens
+
+**Tests for Biometric Login:**
+
+17. Create `__tests__/unit/services/auth/BiometricService.test.ts`:
+    ```typescript
+    // ✅ isAvailable() returns true when sensor exists
+    // ✅ isAvailable() returns false when no sensor
+    // ✅ isAvailable() returns correct biometryType ('FaceID', 'TouchID', 'Biometrics')
+    // ✅ authenticate() resolves true on successful biometric
+    // ✅ authenticate() resolves false on user cancel
+    // ✅ authenticate() uses custom prompt message
+    // ✅ createKeys() returns a public key string
+    // ✅ signPayload() returns a signature string
+    // ✅ signPayload() requires biometric authentication
+    // ✅ deleteKeys() removes stored keys
+    // ✅ Handles sensor unavailable gracefully (no crash)
+    ```
+
+18. Create `__tests__/integration/biometric-auth-flow.test.tsx`:
+    ```typescript
+    // ✅ Login screen shows biometric button when available AND previously used
+    // ✅ Login screen hides biometric button when not available
+    // ✅ Login screen hides biometric button on first-ever login
+    // ✅ Biometric button shows correct icon for biometry type
+    // ✅ Successful biometric auth → navigates to dashboard
+    // ✅ Failed biometric → stays on login, shows password form
+    // ✅ First password login → prompts to enable biometric
+    // ✅ User accepts biometric enrollment → keys created, public key sent to server
+    // ✅ User declines biometric enrollment → no keys created
+    // ✅ Settings toggle disable → keys deleted, biometric login disabled
+    ```
+
+19. Create `backend/__tests__/routes/biometric-auth.test.ts`:
+    ```typescript
+    // ✅ POST /auth/biometric/register — stores public key for user
+    // ✅ POST /auth/biometric/register — rejects unauthenticated request
+    // ✅ POST /auth/biometric/challenge — returns random nonce
+    // ✅ POST /auth/biometric/verify — validates correct signature → returns tokens
+    // ✅ POST /auth/biometric/verify — rejects invalid signature
+    // ✅ POST /auth/biometric/verify — rejects expired challenge nonce
+    ```
+
+---
+
+### FEATURE 4: Dark/Night Mode Auto-Switch (continued)
+
+**Implementation:**
+
+20. Create `src/services/theme/ThemeManager.ts`:
+    ```typescript
+    type ThemeMode = 'light' | 'dark' | 'auto-system' | 'auto-ambient' | 'auto-time';
+    
+    interface ThemeConfig {
+      mode: ThemeMode;
+      ambientLuxThreshold: number;  // lux level below which = dark (default: 20)
+      nightStartHour: number;       // e.g., 19 (7 PM)
+      nightEndHour: number;         // e.g., 6 (6 AM)
+    }
+    
+    class ThemeManager {
+      private currentTheme: 'light' | 'dark' = 'dark';
+      private ambientLightSubscription: any = null;
+      
+      /**
+       * Resolves the active theme based on the selected mode.
+       * - 'light' / 'dark': manual override, returns as-is
+       * - 'auto-system': uses React Native's Appearance API (useColorScheme)
+       * - 'auto-ambient': uses device light sensor (Android only, fallback to system on iOS)
+       * - 'auto-time': switches based on time of day
+       */
+      resolveTheme(config: ThemeConfig): 'light' | 'dark' {
+        switch (config.mode) {
+          case 'light': return 'light';
+          case 'dark': return 'dark';
+          case 'auto-system': return this.getSystemTheme();
+          case 'auto-ambient': return this.getAmbientTheme(config.ambientLuxThreshold);
+          case 'auto-time': return this.getTimeBasedTheme(config.nightStartHour, config.nightEndHour);
+        }
+      }
+      
+      private getSystemTheme(): 'light' | 'dark' {
+        // Uses Appearance.getColorScheme() from react-native
+        const scheme = Appearance.getColorScheme();
+        return scheme === 'dark' ? 'dark' : 'light';
+      }
+      
+      private getAmbientTheme(threshold: number): 'light' | 'dark' {
+        // Android: reads ambient light sensor value
+        // iOS: falls back to system theme (no ambient light API)
+        // If lux < threshold → dark, else → light
+        // Uses a rolling average of last 5 readings to avoid flicker
+      }
+      
+      private getTimeBasedTheme(nightStart: number, nightEnd: number): 'light' | 'dark' {
+        const hour = new Date().getHours();
+        if (nightStart > nightEnd) {
+          // Handles overnight (e.g., 19:00 → 06:00)
+          return (hour >= nightStart || hour < nightEnd) ? 'dark' : 'light';
+        }
+        return (hour >= nightStart && hour < nightEnd) ? 'dark' : 'light';
+      }
+      
+      startAmbientLightListening(callback: (lux: number) => void): void {
+        // Android only: subscribe to ambient light sensor
+        // Uses react-native-ambient-light or custom native module
+        // Emits lux values every 2 seconds
+        // Applies debounce (3-second window) to prevent rapid theme switching
+      }
+      
+      stopAmbientLightListening(): void {
+        // Unsubscribe from sensor
+      }
+    }
+    ```
+
+21. Create `src/services/theme/AmbientLightBridge.ts` (Android native bridge):
+    ```typescript
+    // This wraps the Android SensorManager for TYPE_LIGHT
+    // Exposes to JS:
+    //   - startListening(): void — begins emitting light sensor events
+    //   - stopListening(): void — stops sensor
+    //   - Events: onLightChange(lux: number)
+    // On iOS: returns a no-op (ambient light sensor not exposed)
+    ```
+
+22. Create native Android module `android/app/src/main/java/com/average/sensors/AmbientLightModule.kt`:
+    ```kotlin
+    // Implements ReactContextBaseJavaModule
+    // Registers SensorManager.SENSOR_SERVICE for Sensor.TYPE_LIGHT
+    // On sensor change: emit event "onAmbientLightChange" with { lux: Float }
+    // Methods:
+    //   @ReactMethod fun startListening()
+    //   @ReactMethod fun stopListening()
+    // Register in MainApplication package list
+    ```
+
+23. Create `src/hooks/useTheme.ts`:
+    ```typescript
+    // Custom hook that:
+    // 1. Reads theme config from useSettingsStore
+    // 2. Instantiates ThemeManager
+    // 3. Sets up listeners based on mode:
+    //    - 'auto-system': Appearance.addChangeListener
+    //    - 'auto-ambient': AmbientLightBridge.startListening (Android) / fallback (iOS)
+    //    - 'auto-time': setInterval every 60 seconds to check hour
+    // 4. Returns { theme: 'light' | 'dark', colors: ThemeColors }
+    // 5. Cleans up all listeners on unmount
+    // 6. Applies debounce to prevent rapid switching (min 3 seconds between changes)
+    ```
+
+24. Create `src/theme/themes.ts`:
+    ```typescript
+    export const DARK_THEME = {
+      background: '#0A0A0A',
+      surface: 'rgba(255,255,255,0.08)',
+      surfaceElevated: 'rgba(255,255,255,0.12)',
+      primary: '#00D4FF',
+      secondary: '#7B61FF',
+      accent: '#00FF41',
+      text: '#FFFFFF',
+      textSecondary: 'rgba(255,255,255,0.6)',
+      textTertiary: 'rgba(255,255,255,0.35)',
+      border: 'rgba(255,255,255,0.12)',
+      danger: '#FF4444',
+      success: '#44FF88',
+      warning: '#FFAA00',
+      glassBg: 'rgba(255,255,255,0.06)',
+      glassBorder: 'rgba(255,255,255,0.15)',
+      speedGreen: '#00FF41',
+      speedYellow: '#FFD700',
+      speedRed: '#FF3333',
+      navBarBg: 'rgba(30,30,30,0.85)',
+    };
+    
+    export const LIGHT_THEME = {
+      background: '#F5F5F7',
+      surface: 'rgba(0,0,0,0.04)',
+      surfaceElevated: 'rgba(0,0,0,0.08)',
+      primary: '#007AFF',
+      secondary: '#5856D6',
+      accent: '#34C759',
+      text: '#1C1C1E',
+      textSecondary: 'rgba(0,0,0,0.55)',
+      textTertiary: 'rgba(0,0,0,0.3)',
+      border: 'rgba(0,0,0,0.12)',
+      danger: '#FF3B30',
+      success: '#34C759',
+      warning: '#FF9500',
+      glassBg: 'rgba(255,255,255,0.65)',
+      glassBorder: 'rgba(0,0,0,0.1)',
+      speedGreen: '#34C759',
+      speedYellow: '#FF9500',
+      speedRed: '#FF3B30',
+      navBarBg: 'rgba(255,255,255,0.85)',
+    };
+    ```
+
+25. Create `src/context/ThemeContext.tsx`:
+    ```typescript
+    // React Context provider that wraps the entire app
+    // Provides: { theme, colors, toggleTheme, setThemeMode }
+    // All components use useThemeContext() instead of hardcoded colors
+    // Wrap in AppNavigator.tsx at the top level
+    ```
+
+26. Update ALL existing screens and components:
+    - Replace hardcoded color values with `colors.xxx` from theme context
+    - `LiquidGlassCard` — adjust glass opacity/tint based on theme
+    - `BottomNavBar` — update background and text colors
+    - `SpeedDisplay` — speed color thresholds use theme values
+    - `LoginScreen` — adapt glass/input styles for both themes
+
+27. Add to `SettingsScreen.tsx`:
+    - Theme mode picker: Manual Dark / Manual Light / Auto (System) / Auto (Ambient Light) / Auto (Time-based)
+    - If "Auto (Ambient Light)" selected: show lux threshold slider (5-50 lux)
+    - If "Auto (Time-based)" selected: show night start/end hour pickers
+    - Live preview: theme switches immediately as user changes settings
+
+**Tests for Dark/Night Mode:**
+
+28. Create `__tests__/unit/services/theme/ThemeManager.test.ts`:
+    ```typescript
+    // ✅ resolveTheme('light') → always returns 'light'
+    // ✅ resolveTheme('dark') → always returns 'dark'
+    // ✅ resolveTheme('auto-system') → returns system preference
+    // ✅ resolveTheme('auto-system') → returns 'dark' when system is dark
+    // ✅ resolveTheme('auto-system') → returns 'light' when system is light
+    // ✅ resolveTheme('auto-ambient', threshold=20) → returns 'dark' when lux < 20
+    // ✅ resolveTheme('auto-ambient', threshold=20) → returns 'light' when lux ≥ 20
+    // ✅ resolveTheme('auto-ambient') on iOS → falls back to system theme
+    // ✅ resolveTheme('auto-time', start=19, end=6) → 'dark' at 21:00
+    // ✅ resolveTheme('auto-time', start=19, end=6) → 'light' at 12:00
+    // ✅ resolveTheme('auto-time', start=19, end=6) → 'dark' at 03:00 (overnight)
+    // ✅ resolveTheme('auto-time', start=19, end=6) → 'light' at 06:00 (boundary)
+    // ✅ resolveTheme('auto-time', start=19, end=6) → 'dark' at 19:00 (boundary)
+    // ✅ Ambient light debounce prevents switching within 3 seconds
+    // ✅ Rolling average of 5 lux readings smooths flickering
+    // ✅ startAmbientLightListening emits lux values
+    // ✅ stopAmbientLightListening cleans up subscription
+    ```
+
+29. Create `__tests__/unit/theme/themes.test.ts`:
+    ```typescript
+    // ✅ DARK_THEME has all required color keys
+    // ✅ LIGHT_THEME has all required color keys
+    // ✅ DARK_THEME and LIGHT_THEME have identical key sets
+    // ✅ All color values are valid CSS color strings
+    // ✅ Background colors have sufficient contrast ratio with text (WCAG AA)
+    // ✅ Speed color values are distinguishable from each other
+    ```
+
+---
+
+### FEATURE 5: Trip Summary Export (PDF & CSV)
+
+**Implementation:**
+
+30. Install: `react-native-html-to-pdf`, `react-native-share`, `react-native-fs`
+
+31. Create `src/services/export/TripExportService.ts`:
+    ```typescript
+    import RNHTMLtoPDF from 'react-native-html-to-pdf';
+    import Share from 'react-native-share';
+    import RNFS from 'react-native-fs';
+    
+    interface TripExportData {
+      id: string;
+      date: string;
+      startTime: string;
+      endTime: string;
+      duration: string;          // formatted: "01:23:45"
+      distance: string;          // formatted: "45.2 km"
+      averageSpeed: string;      // formatted: "85 km/h"
+      maxSpeed: string;          // formatted: "142 km/h"
+      speedUnit: 'km/h' | 'mph';
+    }
+    
+    class TripExportService {
+      
+      async exportSingleTripPDF(trip: TripExportData): Promise<void> {
+        const html = this.generateSingleTripHTML(trip);
+        const options = {
+          html,
+          fileName: `average-trip-${trip.id}`,
+          directory: 'Documents',
+          base64: false,
+        };
+        const file = await RNHTMLtoPDF.convert(options);
+        await Share.open({
+          url: `file://${file.filePath}`,
+          type: 'application/pdf',
+          title: 'Share Trip Report',
+        });
+      }
+      
+      async exportMultipleTripsPDF(trips: TripExportData[]): Promise<void> {
+        const html = this.generateMultiTripsHTML(trips);
+        const options = {
+          html,
+          fileName: `average-trip-history-${Date.now()}`,
+          directory: 'Documents',
+        };
+        const file = await RNHTMLtoPDF.convert(options);
+        await Share.open({ url: `file://${file.filePath}`, type: 'application/pdf' });
+      }
+      
+      async exportTripsCSV(trips: TripExportData[]): Promise<void> {
+        const csv = this.generateCSV(trips);
+        const path = `${RNFS.DocumentDirectoryPath}/average-trips-${Date.now()}.csv`;
+        await RNFS.writeFile(path, csv, 'utf8');
+        await Share.open({ url: `file://${path}`, type: 'text/csv' });
+      }
+      
+      private generateSingleTripHTML(trip: TripExportData): string {
+        return `
+          <!DOCTYPE html>
+          <html>
+          <head>
+            <meta charset="utf-8">
+            <style>
+              body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; padding: 40px; color: #1a1a1a; }
+              .header { text-align: center; margin-bottom: 40px; }
+              .header h1 { font-size: 28px; color: #007AFF; margin-bottom: 4px; }
+              .header p { color: #888; font-size: 14px; }
+              .stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 30px; }
+              .stat-card { background: #f5f5f7; border-radius: 16px; padding: 24px; text-align: center; }
+              .stat-value { font-size: 36px; font-weight: 700; color: #1a1a1a; }
+              .stat-label { font-size: 14px; color: #888; margin-top: 4px; }
+              .hero-stat { grid-column: span 2; background: linear-gradient(135deg, #007AFF, #5856D6); color: white; }
+              .hero-stat .stat-value { color: white; font-size: 48px; }
+              .hero-stat .stat-label { color: rgba(255,255,255,0.8); }
+              .footer { text-align: center; margin-top: 40px; color: #ccc; font-size: 12px; }
+            </style>
+          </head>
+          <body>
+            <div class="header">
+              <h1>Average</h1>
+              <p>Trip Report — ${trip.date}</p>
+            </div>
+            <div class="stats-grid">
+              <div class="stat-card hero-stat">
+                <div class="stat-value">${trip.averageSpeed}</div>
+                <div class="stat-label">Average Speed</div>
+              </div>
+              <div class="stat-card">
+                <div class="stat-value">${trip.maxSpeed}</div>
+                <div class="stat-label">Max Speed</div>
+              </div>
+              <div class="stat-card">
+                <div class="stat-value">${trip.distance}</div>
+                <div class="stat-label">Distance</div>
+              </div>
+              <div class="stat-card">
+                <div class="stat-value">${trip.duration}</div>
+                <div class="stat-label">Duration</div>
+              </div>
+              <div class="stat-card">
+                <div class="stat-value">${trip.startTime}</div>
+                <div class="stat-label">Start Time</div>
+              </div>
+            </div>
+            <div class="footer">Generated by Average — ${new Date().toISOString()}</div>
+          </body>
+          </html>
+        `;
+      }
+      
+      private generateMultiTripsHTML(trips: TripExportData[]): string {
+        const rows = trips.map(t => `
+          <tr>
+            <td>${t.date}</td>
+            <td>${t.duration}</td>
+            <td>${t.distance}</td>
+            <td>${t.averageSpeed}</td>
+            <td>${t.maxSpeed}</td>
+          </tr>
+        `).join('');
+        
+        return `
+          <!DOCTYPE html>
+          <html>
+          <head>
+            <style>
+              body { font-family: -apple-system, sans-serif; padding: 40px; }
+              h1 { color: #007AFF; }
+              table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+              th, td { border: 1px solid #ddd; padding: 12px; text-align: center; }
+              th { background: #007AFF; color: white; }
+              tr:nth-child(even) { background: #f9f9f9; }
+              .footer { text-align: center; margin-top: 20px; color: #aaa; font-size: 11px; }
+            </style>
+          </head>
+          <body>
+            <h1>Average — Trip History</h1>
+            <p>${trips.length} trips recorded</p>
+            <table>
+              <thead><tr><th>Date</th><th>Duration</th><th>Distance</th><th>Avg Speed</th><th>Max Speed</th></tr></thead>
+              <tbody>${rows}</tbody>
+            </table>
+            <div class="footer">Generated by Average — ${new Date().toISOString()}</div>
+          </body>
+          </html>
+        `;
+      }
+      
+      private generateCSV(trips: TripExportData[]): string {
+        const header = 'Date,Start Time,End Time,Duration,Distance,Average Speed,Max Speed,Unit';
+        const rows = trips.map(t =>
+          `"${t.date}","${t.startTime}","${t.endTime}","${t.duration}","${t.distance}","${t.averageSpeed}","${t.maxSpeed}","${t.speedUnit}"`
+        ).join('\n');
+        return `${header}\n${rows}`;
+      }
+    }
+    ```
+
+32. Add export buttons to `HistoryScreen.tsx`:
+    - Each trip card: "Share" icon → opens action sheet → "Export as PDF" / "Export as CSV"
+    - Top-right header button: "Export All" → action sheet → "All Trips as PDF" / "All Trips as CSV"
+    - Show loading indicator during export generation
+
+33. Add to `StatsScreen.tsx`:
+    - "Export Stats Report" button at bottom
+    - Generates a comprehensive PDF with all-time stats + trip history
+
+**Tests for Trip Export:**
+
+34. Create `__tests__/unit/services/export/TripExportService.test.ts`:
+    ```typescript
+    // ✅ generateSingleTripHTML() returns valid HTML string
+    // ✅ generateSingleTripHTML() includes trip date
+    // ✅ generateSingleTripHTML() includes average speed
+    // ✅ generateSingleTripHTML() includes max speed
+    // ✅ generateSingleTripHTML() includes distance
+    // ✅ generateSingleTripHTML() includes duration
+    // ✅ generateMultiTripsHTML() includes all trips in table
+    // ✅ generateMultiTripsHTML() shows correct trip count
+    // ✅ generateCSV() returns valid CSV with header row
+    // ✅ generateCSV() has correct number of data rows
+    // ✅ generateCSV() properly escapes values with commas/quotes
+    // ✅ generateCSV() includes all fields per trip
+    // ✅ exportSingleTripPDF() calls RNHTMLtoPDF.convert with correct options
+    // ✅ exportSingleTripPDF() calls Share.open with file path
+    // ✅ exportTripsCSV() writes file to Documents directory
+    // ✅ exportTripsCSV() calls Share.open with csv file path
+    // ✅ Handles empty trips array gracefully (CSV has only header, PDF shows "No trips")
+    // ✅ Handles special characters in trip data (unicode, &, <, >)
+    // ✅ Generated filename includes timestamp for uniqueness
+    ```
+
+---
+
+### FEATURE 6: License Key System (Anti-Piracy)
+
+**Implementation:**
+
+35. Create `src/services/license/LicenseService.ts`:
+    ```typescript
+    import DeviceInfo from 'react-native-device-info';
+    import EncryptedStorage from 'react-native-encrypted-storage';
+    
+    interface LicenseStatus {
+      valid: boolean;
+      expiresAt: string | null;
+      remainingDevices: number;
+      tier: 'free' | 'pro' | 'lifetime';
+    }
+    
+    class LicenseService {
+      private readonly STORAGE_KEY = 'average_license_cache';
+      private readonly VALIDATION_INTERVAL = 24 * 60 * 60 * 1000; // 24 hours
+      
+      async validateLicense(licenseKey: string): Promise<LicenseStatus> {
+        const deviceId = await DeviceInfo.getUniqueId();
+        const deviceModel = DeviceInfo.getModel();
+        const osVersion = await DeviceInfo.getSystemVersion();
+        const appVersion = DeviceInfo.getVersion();
+        
+        // 1. Call backend POST /license/validate
+        const response = await apiClient.post('/license/validate', {
+          licenseKey,
+          deviceId,
+          deviceModel,
+          platform: Platform.OS,
+          osVersion,
+          appVersion,
+        });
+        
+        // 2. Cache result locally (for offline validation)
+        await this.cacheLicenseStatus(response.data);
+        
+        return response.data;
+      }
+      
+      async checkCachedLicense(): Promise<LicenseStatus | null> {
+        // Used on app launch when offline
+        // Returns cached license status if within validation interval
+        // Returns null if cache is expired or doesn't exist
+        const cached = await EncryptedStorage.getItem(this.STORAGE_KEY);
+        if (!cached) return null;
+        
+        const parsed = JSON.parse(cached);
+        const cacheAge = Date.now() - parsed.cachedAt;
+        
+        if (cacheAge > this.VALIDATION_INTERVAL) return null;
+        return parsed.status;
+      }
+      
+      async activateLicense(licenseKey: string): Promise<LicenseStatus> {
+        // First-time activation: binds license to this device
+        // Server checks maxDevices limit
+        // Stores license key securely
+      }
+      
+      async deactivateDevice(): Promise<void> {
+        // Unbinds this device from the license
+        // Frees up a device slot
+        // Used when user wants to transfer to new device
+      }
+      
+      private async cacheLicenseStatus(status: LicenseStatus): Promise<void> {
+        await EncryptedStorage.setItem(this.STORAGE_KEY, JSON.stringify({
+          status,
+          cachedAt: Date.now(),
+        }));
+      }
+    }
+    ```
+
+36. Backend additions — update `backend/src/routes/license.ts`:
+    ```typescript
+    // POST /license/validate
+    // - Receives: licenseKey, deviceId, deviceModel, platform, osVersion, appVersion
+    // - Validates key exists and is active
+    // - If device is new AND maxDevices not exceeded: register device
+    // - If device is new AND maxDevices exceeded: reject (403)
+    // - If device is already registered: accept
+    // - Updates lastSeen timestamp for device fingerprint
+    // - Returns: { valid, expiresAt, remainingDevices, tier }
+    
+    // POST /license/activate
+    // - First-time activation of a license key
+    // - Binds to device
+    // - Returns license status
+    
+    // POST /license/deactivate
+    // - Unbinds current device from license
+    // - Authenticated + requires license key confirmation
+    
+    // GET /license/status
+    // - Returns current license status for authenticated user
+    
+    // ADMIN endpoints (for you):
+    // POST /admin/license/generate
+    // - Generates new license keys (batch)
+    // - Params: count, tier, maxDevices, expiresAt
+    // - Returns array of generated keys
+    
+    // POST /admin/license/revoke
+    // - Revokes a specific license key
+    // - All devices bound to it are invalidated
+    ```
+
+37. Create `backend/src/services/licenseGenerator.ts`:
+    ```typescript
+    // Generates license keys in format: XXXX-XXXX-XXXX-XXXX
+    // Each group is alphanumeric uppercase (excluding confusing chars: 0/O, 1/I/L)
+    // Uses crypto.randomBytes for cryptographic randomness
+    // Includes a check digit (last char of last group) for offline basic validation
+    // 
+    // function generateLicenseKey(): string
+    // function validateKeyFormat(key: string): boolean  // client-side format check
+    // function generateBatch(count: number, tier: string, maxDevices: number): LicenseKey[]
+    ```
+
+38. Add license activation screen — Create `src/screens/LicenseScreen.tsx`:
+    - Shows when user has no active license (after login, before dashboard)
+    - Input field for license key (formatted with dashes as user types)
+    - "Activate" button
+    - "Continue with Free Tier" button (if free tier is available)
+    - Shows activation status, device count, expiry info
+    - Error handling for invalid key, max devices reached, expired key
+
+39. Update navigation flow in `AppNavigator.tsx`:
+    ```
+    Splash → Security Check → Login → License Check → Dashboard
+                                         ↓
+                                   (No valid license?)
+                                         ↓
+                                   LicenseScreen
+    ```
+
+40. Add to `SettingsScreen.tsx`:
+    - "License" section showing:
+      - Current license key (partially masked: XXXX-****-****-XXXX)
+      - License tier (Free / Pro / Lifetime)
+      - Expiry date
+      - Devices: "2 of 3 used"
+      - "Deactivate This Device" button
+      - "Enter New License Key" button
+
+**Tests for License System:**
+
+41. Create `__tests__/unit/services/license/LicenseService.test.ts`:
+    ```typescript
+    // ✅ validateLicense() sends correct payload to /license/validate
+    // ✅ validateLicense() includes device fingerprint data
+    // ✅ validateLicense() caches result on success
+    // ✅ validateLicense() throws on invalid key
+    // ✅ validateLicense() throws on max devices exceeded
+    // ✅ validateLicense() throws on expired key
+    // ✅ checkCachedLicense() returns cached status within interval
+    // ✅ checkCachedLicense() returns null when cache expired (>24h)
+    // ✅ checkCachedLicense() returns null when no cache exists
+    // ✅ activateLicense() binds device to license key
+    // ✅ deactivateDevice() removes device binding
+    // ✅ License key is stored in EncryptedStorage (not plain AsyncStorage)
+    ```
+
+42. Create `__tests__/unit/services/license/licenseGenerator.test.ts` (backend):
+    ```typescript
+    // ✅ generateLicenseKey() returns key in XXXX-XXXX-XXXX-XXXX format
+    // ✅ generateLicenseKey() uses only allowed characters (no 0/O/1/I/L)
+    // ✅ generateLicenseKey() produces unique keys (generate 1000, check no duplicates)
+    // ✅ validateKeyFormat() returns true for valid format
+    // ✅ validateKeyFormat() returns false for invalid format
+    // ✅ validateKeyFormat() returns false for empty string
+    // ✅ validateKeyFormat() checks check digit validity
+    // ✅ generateBatch(10) returns exactly 10 unique keys
+    // ✅ generateBatch() assigns correct tier and maxDevices
+    ```
+
+43. Create `__tests__/screens/LicenseScreen.test.tsx`:
+    ```typescript
+    // ✅ Renders license key input field
+    // ✅ Auto-formats key with dashes as user types
+    // ✅ Activate button is disabled when input is empty
+    // ✅ Activate button is disabled when format is invalid
+    // ✅ Calls LicenseService.activateLicense on button press
+    // ✅ Shows success state and navigates to dashboard
+    // ✅ Shows error message for invalid key
+    // ✅ Shows error message for max devices reached
+    // ✅ Shows error message for expired key
+    // ✅ "Continue Free" button navigates to dashboard (if free tier enabled)
+    // ✅ Loading state shown during activation
+    ```
+
+---
+
+### FEATURE 7: Offline-First Architecture with Smart Sync
+
+**Implementation:**
+
+44. Create `src/services/sync/SyncManager.ts`:
+    ```typescript
+    import NetInfo from '@react-native-community/netinfo';
+    
+    interface SyncQueueItem {
+      id: string;
+      type: 'trip' | 'settings' | 'license_check';
+      payload: any;
+      createdAt: number;
+      retryCount: number;
+      maxRetries: number;
+    }
+    
+    class SyncManager {
+      private syncQueue: SyncQueueItem[] = [];
+      private isSyncing: boolean = false;
+      private networkListener: any = null;
+      
+      async initialize(): Promise<void> {
+        // 1. Load pending sync queue from SQLite
+        // 2. Listen for network state changes
+        // 3. When coming online: process queue
+        this.networkListener = NetInfo.addEventListener(state => {
+          if (state.isConnected && !this.isSyncing) {
+            this.processQueue();
+          }
+        });
+      }
+      
+      async enqueue(item: Omit<SyncQueueItem, 'id' | 'retryCount'>): Promise<void> {
+        // Add to in-memory queue + persist to SQLite
+        // If online, immediately attempt sync
+      }
+      
+      async processQueue(): Promise<void> {
+        // Process items in FIFO order
+        // For each item:
+        //   - Attempt API call
+        //   - On success: remove from queue
+        //   - On failure: increment retryCount
+        //   - If retryCount >= maxRetries: move to dead letter queue
+        // Use exponential backoff between retries
+      }
+      
+      async getQueueStatus(): Promise<{
+        pending: number;
+        failed: number;
+        lastSyncAt: number | null;
+      }> {
+        // Returns current sync status for UI display
+      }
+      
+      destroy(): void {
+        // Cleanup network listener
+      }
+    }
+    ```
+
+45. Install: `@react-native-community/netinfo`
+
+46. Integrate SyncManager into existing services:
+    - `TripManager.ts` → on trip save, enqueue sync item
+    - `SettingsScreen.tsx` → show sync status (✅ Synced / ⏳ 3 pending / ❌ Offline)
+    - `AuthService.ts` → on login, trigger full sync
+    - `LicenseService.ts` → enqueue periodic license validation
+
+47. Create `src/components/SyncStatusBadge.tsx`:
+    - Small indicator in Settings and optionally in Dashboard header
+    - Green dot: all synced
+    - Yellow dot: items pending
+    - Red dot: offline / sync failed
+    - Tap to see sync details (pending count, last sync time, force retry)
+
+**Tests for Offline-First Sync:**
+
+48. Create `__tests__/unit/services/sync/SyncManager.test.ts`:
+    ```typescript
+    // ✅ initialize() loads pending queue from SQLite
+    // ✅ initialize() sets up network listener
+    // ✅ enqueue() adds item to queue
+    // ✅ enqueue() persists item to SQLite
+    // ✅ enqueue() triggers immediate sync when online
+    // ✅ processQueue() processes items in FIFO order
+    // ✅ processQueue() removes successful items from queue
+    // ✅ processQueue() increments retryCount on failure
+    // ✅ processQueue() moves item to dead letter after maxRetries
+    // ✅ processQueue() uses exponential backoff (1s, 2s, 4s, 8s...)
+    // ✅ Network change to online triggers processQueue()
+    // ✅ Network change to offline does NOT trigger processQueue()
+    // ✅ Concurrent processQueue() calls don't duplicate work (isSyncing lock)
+    // ✅ getQueueStatus() returns correct counts
+    // ✅ destroy() removes network listener
+    // ✅ Empty queue → processQueue() returns immediately
+    ```
+
+49. Create `__tests__/integration/offline-sync-flow.test.ts`:
+    ```typescript
+    // ✅ Save trip while offline → trip stored locally + queued for sync
+    // ✅ Come online → queued trip synced to backend
+    // ✅ Save trip while online → trip synced immediately
+    // ✅ API failure → item stays in queue with incremented retry
+    // ✅ Multiple trips saved offline → all synced in order when online
+    // ✅ Sync status badge shows correct state at each step
+    ```
+
+---
+
+### FEATURE 8: Device Fingerprinting Enhancement
+
+**Implementation:**
+
+50. Create `src/services/security/DeviceFingerprint.ts`:
+    ```typescript
+    import DeviceInfo from 'react-native-device-info';
+    
+    interface Fingerprint {
+      deviceId: string;          // Unique device ID
+      model: string;             // "iPhone 15 Pro" / "Pixel 8"
+      brand: string;             // "Apple" / "Google"
+      systemName: string;        // "iOS" / "Android"
+      systemVersion: string;     // "17.2" / "14"
+      appVersion: string;        // "1.0.0"
+      buildNumber: string;       // "42"
+      bundleId: string;          // "com.average.app"
+      isTablet: boolean;
+      hasNotch: boolean;
+      screenWidth: number;
+      screenHeight: number;
+      timezone: string;          // "America/New_York"
+      locale: string;            // "en-US"
+      carrier: string;           // "Verizon" (or empty)
+      firstInstallTime: number;  // timestamp
+      fingerprintHash: string;   // SHA-256 of all above combined
+    }
+    
+    class DeviceFingerprintService {
+      async collect(): Promise<Fingerprint> {
+        // Collects all device info
+        // Generates SHA-256 hash of concatenated values
+        // This hash uniquely identifies a device + install combination
+      }
+      
+      async verify(storedHash: string): Promise<boolean> {
+        // Collects current fingerprint and compares hash
+        // Returns true if device is the same
+        // Allows for minor changes (OS version update) by comparing individual fields
+        // Flags suspicious changes (different model, different brand)
+      }
+      
+      async getAnonymizedFingerprint(): Promise<string> {
+        // Returns a privacy-friendly fingerprint
+        // Used for analytics without PII
+      }
+    }
+    ```
+
+51. Integrate into auth flow:
+    - On login: send device fingerprint to server
+    - Server stores/updates fingerprint for the session
+    - On each API call: include fingerprint hash in header
+    - Server can flag suspicious fingerprint changes (potential token theft)
+
+**Tests for Device Fingerprinting:**
+
+52. Create `__tests__/unit/services/security/DeviceFingerprint.test.ts`:
+    ```typescript
+    // ✅ collect() returns all required fields
+    // ✅ collect() generates a fingerprintHash
+    // ✅ collect() returns consistent hash for same device
+    // ✅ verify() returns true for matching fingerprint
+    // ✅ verify() returns false for different device
+    // ✅ verify() tolerates OS version change (minor field change)
+    // ✅ verify() flags model change as suspicious
+    // ✅ getAnonymizedFingerprint() returns a hash string
+    // ✅ getAnonymizedFingerprint() does not contain PII
+    // ✅ Handles missing device info gracefully (uses fallback values)
+    ```
+
+---
+
+### FEATURE 9: Speed Unit Toggle Enhancement + Smart Defaults
+
+**Implementation:**
+
+53. Update `src/store/useSettingsStore.ts`:
+    ```typescript
+    interface SettingsState {
+      // Existing
+      speedUnit: 'kmh' | 'mph';
+      
+      // New
+      distanceUnit: 'km' | 'mi';           // auto-linked to speed unit
+      autoDetectUnit: boolean;               // detect from device locale
+      showBothUnits: boolean;                // show secondary unit in smaller text
+      speedDisplayPrecision: 0 | 1;          // decimal places (0 = "127", 1 = "127.4")
+    }
+    ```
+
+54. Create `src/utils/unitDetector.ts`:
+    ```typescript
+    // Detects whether to use metric or imperial based on:
+    // 1. Device locale (en-US, en-GB, etc.)
+    // 2. Country code from locale
+    // Imperial countries: US, UK (for road speed), Myanmar, Liberia
+    // Returns: 'kmh' | 'mph'
+    
+    import { NativeModules, Platform } from 'react-native';
+    
+    export function detectPreferredUnit(): 'kmh' | 'mph' {
+      const locale = Platform.OS === 'ios' 
+        ? NativeModules.SettingsManager.settings.AppleLocale 
+        : NativeModules.I18nManager.localeIdentifier;
+      
+      const imperialLocales = ['en_US', 'en_GB', 'my_MM', 'en_LR'];
+      return imperialLocales.some(l => locale?.startsWith(l)) ? 'mph' : 'kmh';
+    }
+    ```
+
+55. Update `SpeedDisplay.tsx`:
+    - If `showBothUnits` is true: show primary unit large, secondary unit small below
+    - Example: **127** km/h  *(79 mph)*
+    - Precision follows `speedDisplayPrecision` setting
+    - Tap on unit area cycles: km/h → mph → both → km/h
+
+56. Add to `SettingsScreen.tsx`:
+    - "Auto-detect unit from locale" toggle
+    - "Show both units" toggle
+    - "Speed precision" picker (0 or 1 decimal)
+
+**Tests for Speed Unit Enhancement:**
+
+57. Create `__tests__/unit/utils/unitDetector.test.ts`:
+    ```typescript
+    // ✅ detectPreferredUnit() returns 'mph' for en_US locale
+    // ✅ detectPreferredUnit() returns 'mph' for en_GB locale
+    // ✅ detectPreferredUnit() returns 'kmh' for de_DE locale
+    // ✅ detectPreferredUnit() returns 'kmh' for ja_JP locale
+    // ✅ detectPreferredUnit() returns 'kmh' for fr_FR locale
+    // ✅ detectPreferredUnit() returns 'kmh' for unknown locale (safe default)
+    // ✅ detectPreferredUnit() handles null locale gracefully
+    ```
+
+58. Create `__tests__/components/SpeedDisplay-enhanced.test.tsx`:
+    ```typescript
+    // ✅ Shows both units when showBothUnits is true
+    // ✅ Secondary unit is visually smaller
+    // ✅ Conversion is accurate (100 km/h = 62.1 mph)
+    // ✅ Precision 0: shows "127" not "127.4"
+    // ✅ Precision 1: shows "127.4" not "127"
+    // ✅ Tap cycles through unit display modes
+    // ✅ Auto-detect sets correct unit on first launch
+    ```
+
+---
+
+### FEATURE 10: Enhanced Kalman Filter + GPS Quality Indicator
+
+**Implementation:**
+
+59. Update `src/services/gps/KalmanFilter.ts` to a full 2D Kalman Filter:
+    ```typescript
+    /**
+     * Enhanced 2D Kalman Filter for GPS position + velocity estimation.
+     * State vector: [latitude, longitude, velocity_north, velocity_east]
+     * This provides much better speed estimation than 1D filtering.
+     * 
+     * Benefits over 1D:
+     * - Considers both position and velocity simultaneously
+     * - Better handles GPS jumps (outlier rejection)
+     * - Provides velocity direction (heading) for free
+     * - Smoother acceleration/deceleration transitions
+     */
+    
+    class KalmanFilter2D {
+      private state: number[];          // [lat, lon, vN, vE]
+      private covariance: number[][];   // 4x4 covariance matrix
+      private processNoise: number;
+      private measurementNoise: number;
+      
+      constructor(config: {
+        processNoise?: number;      // How much we trust the model (lower = smoother)
+        measurementNoise?: number;  // How much we trust GPS (lower = more responsive)
+        initialAccuracy?: number;   // Initial GPS accuracy in meters
+      }) { }
+      
+      predict(dt: number): void {
+        // Predict next state based on constant velocity model
+        // Update covariance with process noise
+      }
+      
+      update(measurement: {
+        latitude: number;
+        longitude: number;
+        accuracy: number;    // GPS accuracy in meters (used to adjust measurement noise)
+        speed?: number;      // Optional: GPS-reported speed
+        timestamp: number;
+      }): FilteredState {
+        // Kalman gain calculation
+        // State update
+        // Covariance update
+        // Outlier rejection: if measurement is > 3σ from prediction, reduce its weight
+        // Returns: { latitude, longitude, speed, heading, quality }
+      }
+      
+      getSpeed(): number {
+        // Returns filtered speed in m/s from velocity components
+        // speed = sqrt(vN² + vE²)
+      }
+      
+      getHeading(): number {
+        // Returns heading in degrees from velocity components
+        // heading = atan2(vE, vN) * 180 / π
+      }
+      
+      getQuality(): 'excellent' | 'good' | 'fair' | 'poor' {
+        // Based on innovation (prediction vs measurement difference)
+        // and current covariance magnitude
+      }
+      
+      reset(): void {
+        // Reset filter state
+      }
+    }
+    ```
+
+60. Create `src/components/GPSQualityIndicator.tsx`:
+    ```typescript
+    // Small indicator component showing GPS signal quality
+    // 4 bars like cell signal strength:
+    //   - 4 bars (green): excellent — accuracy < 5m
+    //   - 3 bars (green): good — accuracy < 15m
+    //   - 2 bars (yellow): fair — accuracy < 30m
+    //   - 1 bar (red): poor — accuracy > 30m
+    //   - 0 bars (gray): no signal
+    // Positioned in top-left of DashboardScreen
+    // Shows accuracy in meters on long-press
+    // Animated transitions between states
+    ```
+
+61. Add GPS quality to `DashboardScreen.tsx`:
+    - Top-left corner: `<GPSQualityIndicator />`
+    - When quality is 'poor': show subtle warning banner "GPS signal weak — speed may be inaccurate"
+
+**Tests for Enhanced Kalman Filter & GPS Quality:**
+
+62. Create `__tests__/unit/services/gps/KalmanFilter2D.test.ts`:
+    ```typescript
+    // ✅ Initializes with zero velocity state
+    // ✅ predict() advances state by dt seconds
+    // ✅ update() incorporates GPS measurement
+    // ✅ Filters noisy GPS data to smooth trajectory
+    // ✅ getSpeed() returns magnitude of velocity vector
+    // ✅ getSpeed() converges to true speed with good data
+    // ✅ getHeading() returns correct compass direction
+    // ✅ Outlier rejection: ignores GPS jump > 3σ
+    // ✅ Adapts to GPS accuracy (high accuracy = more trust)
+    // ✅ Adapts to GPS accuracy (low accuracy = less trust)
+    // ✅ getQuality() returns 'excellent' for accuracy < 5m
+    // ✅ getQuality() returns 'good' for accuracy < 15m
+    // ✅ getQuality() returns 'fair' for accuracy < 30m
+    // ✅ getQuality() returns 'poor' for accuracy ≥ 30m
+    // ✅ reset() clears all state
+    // ✅ Handles rapid successive updates without degradation
+    // ✅ Performance: 10,000 predict+update cycles in < 200ms
+    // ✅ Known trajectory test: straight line at 100 km/h → filtered speed ≈ 100 km/h ± 2
+    // ✅ Known trajectory test: stationary → filtered speed converges to 0
+    // ✅ Known trajectory test: acceleration 0→100 km/h → smooth ramp, no overshoot
+    ```
+
+63. Create `__tests__/components/GPSQualityIndicator.test.tsx`:
+    ```typescript
+    // ✅ Shows 4 bars for accuracy < 5m
+    // ✅ Shows 3 bars for accuracy < 15m
+    // ✅ Shows 2 bars for accuracy < 30m
+    // ✅ Shows 1 bar for accuracy ≥ 30m
+    // ✅ Shows 0 bars when no GPS data
+    // ✅ Bars use correct colors (green/yellow/red/gray)
+    // ✅ Long-press shows accuracy in meters
+    // ✅ Animates between states smoothly
+    ```
+
+---
+
+### FINAL PART: Integration Tests for All New Features Together
+
+64. Create `__tests__/integration/enhanced-features-flow.test.tsx`:
+    ```typescript
+    // ✅ Full enhanced trip flow:
+    //    Login (biometric) → License check → Dashboard → Start trip →
+    //    Speed alert triggers at configured limit → 
+    //    HUD mode activated → Speed visible mirrored →
+    //    Exit HUD → Stop trip → Export as PDF → Share
+    
+    // ✅ Offline enhanced flow:
+    //    Start trip offline → Complete trip → Trip saved locally →
+    //    Come online → Trip synced → Appears in backend
+    
+    // ✅ Theme switching during drive:
+    //    Set auto-ambient → Start trip → Simulate low lux →
+    //    Theme switches to dark → UI elements use dark colors →
+    //    Simulate high lux → Theme switches to light
+    
+    // ✅ Settings persistence:
+    //    Set all enhanced settings → Kill app → Relaunch →
+    //    All settings preserved (speed unit, alert config, theme mode, etc.)
+    
+    // ✅ License + Device flow:
+    //    Login → Enter license key → Activate →
+    //    Device fingerprint stored → Dashboard accessible →
+    //    Same key on second device → Works (within limit) →
+    //    Same key on third device → Rejected (max 2 devices)
+    ```
+
+---
+
+### UPDATE whathasbeenimplemented.md — FINAL STATE
+
+After ALL features and tests are implemented, write the FINAL update to `whathasbeenimplemented.md`:
+
+```markdown
+# What Has Been Implemented — Final State
+
+## Task 1: ✅ Complete
+- Project scaffolding (React Native CLI + TypeScript)
+- Backend (Fastify + Prisma + PostgreSQL)
+- Authentication system (JWT + refresh tokens)
+- Security gate (basic)
+- Login/Register screens
+- API client with interceptors
+
+## Task 2: ✅ Complete
+- GPS Service with high-accuracy tracking
+- Speed Engine (current, average, max, distance)
+- Kalman Filter (1D — now superseded by 2D in Task 5)
+- Haversine Calculator
+- Liquid Glass UI components (Card, Button)
+- Bottom Navigation Bar (cnrad-style floating pill)
+- Dashboard, Stats, History, Settings screens
+- Trip management + SQLite storage
+- Zustand stores (speed, auth, trip, settings)
+
+## Task 3: ✅ Complete
+- Android Auto native integration (Kotlin)
+- Apple CarPlay native integration (Swift)
+- 7-Layer anti-cracking suite
+- JS obfuscation pipeline
+- Native obfuscation (ProGuard/R8, LLVM)
+- SSL pinning
+- Runtime integrity checks
+- Build configuration for release
+- Comprehensive documentation
+
+## Task 4: ✅ Complete
+- 150+ unit tests across all services
+- 30+ component tests
+- 20+ screen tests
+- 15+ integration tests
+- E2E test suite (Detox) for auth, navigation, speed tracking
+- CI/CD pipeline (GitHub Actions)
+- Android build verification script
+- iOS build verification script
+- Native config verification script
+- Fix scripts for common build issues
+- Test coverage ≥ 80%
+
+## Task 5: ✅ Complete
+- Feature 1: HUD Mode (windshield projection, mirrored display)
+- Feature 2: Speed Alerts (configurable limit, vibration/sound)
+- Feature 3: Biometric Login (FaceID/TouchID/Fingerprint)
+- Feature 4: Dark/Night Auto-Switch (system/ambient/time-based)
+- Feature 5: Trip Export (PDF + CSV with Share)
+- Feature 6: License Key System (generation, validation, device binding)
+- Feature 7: Offline-First Sync (queue, retry, exponential backoff)
+- Feature 8: Device Fingerprinting (SHA-256 hash, verification)
+- Feature 9: Speed Unit Enhancement (auto-detect, dual display, precision)
+- Feature 10: Enhanced 2D Kalman Filter + GPS Quality Indicator
+- 100+ additional tests for all new features
+- Integration tests covering cross-feature flows
+
+## Total Test Count
+- Unit tests: ~200
+- Component tests: ~45
+- Screen tests: ~30
+- Integration tests: ~25
+- E2E tests: ~15
+- Backend tests: ~40
+- TOTAL: ~355 tests
+
+## Dependencies Added in Task 5
+- react-native-biometrics
+- react-native-orientation-locker
+- react-native-system-setting
+- react-native-sound
+- react-native-html-to-pdf
+- react-native-share
+- react-native-fs
+- @react-native-community/netinfo
+
+## Known Limitations
+- Ambient light sensor: Android only (iOS falls back to system theme)
+- CarPlay: requires Apple developer entitlement application
+- GPS accuracy: requires real device testing (simulators limited)
+- Hermes bytecode encryption: requires custom native loader (advanced)
+- HUD mode effectiveness depends on windshield glass type
+
+## Pre-Build Checklist
+1. Run: npm install
+2. Run: npm run build:verify:config
+3. Run: npm run test
+4. Run: cd ios && pod install
+5. Run: npm run build:verify:android
+6. Run: npm run build:verify:ios
+7. Open in Android Studio / Xcode — should build cleanly
+```
