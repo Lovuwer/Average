@@ -615,7 +615,7 @@ Actions: updateSpeed, setTracking, setPaused, toggleUnit, reset
 
 **What was implemented:**
 - `DeviceFingerprintService.ts` — collects device ID, model, brand, OS, app version, screen dimensions, bundle ID
-- SHA-256 hash of combined device attributes for unique identification
+- Deterministic hash of combined device attributes for unique identification
 - `verify()` — compares current fingerprint against stored hash
 - `getAnonymizedFingerprint()` — privacy-friendly hash without PII
 

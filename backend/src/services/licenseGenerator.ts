@@ -7,9 +7,7 @@ export function generateLicenseKey(): string {
   for (let g = 0; g < 4; g++) {
     let group = '';
     for (let c = 0; c < 4; c++) {
-      const bytes = crypto.randomBytes(1);
-      const index = bytes[0] % ALLOWED_CHARS.length;
-      group += ALLOWED_CHARS[index];
+      group += getUnbiasedChar();
     }
     groups.push(group);
   }
@@ -59,4 +57,15 @@ function computeCheckDigit(keyWithoutCheck: string): string {
     sum += keyWithoutCheck.charCodeAt(i) * (i + 1);
   }
   return ALLOWED_CHARS[sum % ALLOWED_CHARS.length];
+}
+
+// Rejection sampling to avoid modulo bias
+function getUnbiasedChar(): string {
+  const charCount = ALLOWED_CHARS.length;
+  const maxValid = Math.floor(256 / charCount) * charCount;
+  let value: number;
+  do {
+    value = crypto.randomBytes(1)[0];
+  } while (value >= maxValid);
+  return ALLOWED_CHARS[value % charCount];
 }

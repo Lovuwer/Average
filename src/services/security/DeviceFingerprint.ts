@@ -26,7 +26,7 @@ export class DeviceFingerprintService {
     const { width, height } = Dimensions.get('screen');
 
     const raw = `${deviceId}|${model}|${Platform.OS}|${systemVersion}|${appVersion}|${bundleId}|${width}|${height}`;
-    const hash = await this.sha256(raw);
+    const hash = await this.hashString(raw);
 
     return {
       deviceId,
@@ -52,11 +52,11 @@ export class DeviceFingerprintService {
   async getAnonymizedFingerprint(): Promise<string> {
     const fp = await this.collect();
     const anonymized = `${fp.systemName}|${fp.model}|${fp.screenWidth}x${fp.screenHeight}`;
-    return await this.sha256(anonymized);
+    return await this.hashString(anonymized);
   }
 
-  private async sha256(input: string): Promise<string> {
-    // Simple hash for React Native (no native crypto available in JS)
+  private async hashString(input: string): Promise<string> {
+    // Simple deterministic hash for React Native (no native crypto module in JS runtime)
     let hash = 0;
     for (let i = 0; i < input.length; i++) {
       const char = input.charCodeAt(i);

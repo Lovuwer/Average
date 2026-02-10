@@ -376,6 +376,6 @@ The app includes a 7-layer anti-cracking suite:
 | Trip Export | PDF & CSV export with Share integration |
 | License System | XXXX-XXXX-XXXX-XXXX key format, device binding |
 | Offline Sync | Queue-based sync with exponential backoff retry |
-| Device Fingerprinting | SHA-256 device identification for security |
+| Device Fingerprinting | Deterministic device identification for security |
 | Speed Unit Enhancement | Locale auto-detection (metric/imperial) |
 | 2D Kalman Filter | Enhanced GPS filtering with outlier rejection |
