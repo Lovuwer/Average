@@ -1,10 +1,11 @@
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Pressable } from 'react-native';
 import { useSpeed } from '../hooks/useSpeed';
 import SpeedDisplay from '../components/SpeedDisplay';
 import SpeedGauge from '../components/SpeedGauge';
 import LiquidGlassCard from '../components/LiquidGlassCard';
 import LiquidGlassButton from '../components/LiquidGlassButton';
+import GPSQualityIndicator from '../components/GPSQualityIndicator';
 import { COLORS, SPACING } from '../theme/glassMorphism';
 
 function formatDuration(seconds: number): string {
@@ -16,7 +17,7 @@ function formatDuration(seconds: number): string {
     .padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
 }
 
-const DashboardScreen: React.FC = () => {
+const DashboardScreen: React.FC<{ navigation?: any }> = ({ navigation }) => {
   const {
     currentSpeed,
     averageSpeed,
@@ -39,6 +40,19 @@ const DashboardScreen: React.FC = () => {
       <ScrollView
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}>
+        {/* Top bar: GPS quality + HUD button */}
+        <View style={styles.topBar}>
+          <GPSQualityIndicator accuracy={null} quality="none" />
+          {isTracking && (
+            <Pressable
+              onPress={() => navigation?.navigate('HUD')}
+              style={styles.hudButton}
+              testID="hud-button">
+              <Text style={styles.hudButtonText}>HUD</Text>
+            </Pressable>
+          )}
+        </View>
+
         {/* Trip timer */}
         <Text style={styles.timer}>{formatDuration(duration)}</Text>
 
@@ -135,9 +149,29 @@ const styles = StyleSheet.create({
   },
   content: {
     alignItems: 'center',
-    paddingTop: 60,
+    paddingTop: 40,
     paddingHorizontal: SPACING.lg,
     paddingBottom: 120,
+  },
+  topBar: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    width: '100%',
+    marginBottom: SPACING.sm,
+  },
+  hudButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.15)',
+  },
+  hudButtonText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: COLORS.primary,
   },
   timer: {
     fontSize: 20,

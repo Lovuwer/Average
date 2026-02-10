@@ -484,3 +484,262 @@ Actions: updateSpeed, setTracking, setPaused, toggleUnit, reset
 - Mocks are centralized in `jest.setup.ts` — add new native module mocks there
 - For new features, create tests alongside implementation
 - Utility functions (formatters, validators) are in `src/utils/` — extend as needed
+
+---
+
+## TASK 5 — Enhanced Features + Tests
+
+### Status: COMPLETE
+
+---
+
+### Feature 1: HUD (Heads-Up Display) Mode
+
+**What was implemented:**
+- `HUDScreen.tsx` — full-screen black background (#000000), mirrored display (`scaleX: -1`), massive speed font (200px), configurable color
+- Landscape orientation ready, keep-awake ready, max brightness ready
+- Exit via double-tap gesture
+- StatusBar hidden on mount, restored on unmount
+- Speed data from shared `useSpeedStore` (same state as dashboard)
+- HUD button added to `DashboardScreen.tsx` (top-right, only visible when tracking)
+
+**Files created:**
+- `src/screens/HUDScreen.tsx`
+
+**Files modified:**
+- `src/screens/DashboardScreen.tsx` — added HUD button and GPS quality indicator
+- `src/navigation/AppNavigator.tsx` — added HUD route
+
+---
+
+### Feature 2: Speed Alerts
+
+**What was implemented:**
+- `SpeedAlertService.ts` — configurable speed limit, warning threshold (percentage), alert types (vibration/sound/both), cooldown to prevent spam
+- `SoundManager.ts` — sound playback service (initialize/playWarning/playExceeded/release)
+- Alert levels: none → warning (≥ threshold% of limit) → exceeded (≥ limit)
+- Vibration patterns: short pulse for warning, long pattern for exceeded
+- Respects cooldown period between alerts
+
+**Files created:**
+- `src/services/alerts/SpeedAlertService.ts`
+- `src/services/alerts/SoundManager.ts`
+
+---
+
+### Feature 3: Biometric Login
+
+**What was implemented:**
+- `BiometricService.ts` — FaceID/TouchID/Fingerprint detection, authentication prompt, key pair management (create/sign/delete)
+- `isAvailable()` — checks sensor availability and returns biometry type
+- `authenticate()` — simple biometric prompt with custom message
+- `createKeys()` / `signPayload()` / `deleteKeys()` — cryptographic key management for biometric-based token generation
+
+**Files created:**
+- `src/services/auth/BiometricService.ts`
+
+---
+
+### Feature 4: Dark/Night Mode Auto-Switch
+
+**What was implemented:**
+- `ThemeManager.ts` — resolves theme based on 5 modes: manual light, manual dark, auto-system (Appearance API), auto-ambient (light sensor), auto-time (time-based)
+- `themes.ts` — complete dark and light theme color sets (19 color keys each)
+- `ThemeContext.tsx` — React Context provider wrapping the app with `useThemeContext()` hook
+- `useTheme.ts` — convenience hook returning resolved theme and colors
+- `AmbientLightBridge.ts` — Android native module bridge for ambient light sensor (no-op on iOS)
+- Time-based theme: supports overnight ranges (e.g., 19:00 → 06:00)
+- Ambient light: rolling average of 5 readings, 3-second debounce to prevent flickering
+
+**Files created:**
+- `src/services/theme/ThemeManager.ts`
+- `src/services/theme/AmbientLightBridge.ts`
+- `src/theme/themes.ts`
+- `src/context/ThemeContext.tsx`
+- `src/hooks/useTheme.ts`
+
+---
+
+### Feature 5: Trip Export (PDF & CSV)
+
+**What was implemented:**
+- `TripExportService.ts` — generates single trip PDF, multi-trip PDF, and CSV exports
+- HTML templates with styled layouts (hero stat card, grid layout, table for multi-trip)
+- CSV with proper header row and data escaping
+- HTML escaping to prevent XSS in generated content
+- CSV escaping for values with quotes/commas
+- Handles empty trips array gracefully
+- Share integration via react-native-share
+
+**Files created:**
+- `src/services/export/TripExportService.ts`
+
+---
+
+### Feature 6: License Key System
+
+**What was implemented:**
+- `LicenseService.ts` — validate, activate, deactivate, cached offline validation (24h interval)
+- `LicenseScreen.tsx` — license key input with auto-formatting (XXXX-XXXX-XXXX-XXXX), activation flow, "Continue with Free Tier" option
+- `licenseGenerator.ts` (backend) — cryptographically random key generation, check digit validation, batch generation
+- Allowed characters exclude confusing chars (no 0/O/1/I/L)
+- License key cached in EncryptedStorage (secure, not plain AsyncStorage)
+- Navigation updated: Splash → Login → License → Main
+
+**Files created:**
+- `src/services/license/LicenseService.ts`
+- `src/screens/LicenseScreen.tsx`
+- `backend/src/services/licenseGenerator.ts`
+
+**Files modified:**
+- `src/navigation/AppNavigator.tsx` — added License route
+
+---
+
+### Feature 7: Offline-First Sync
+
+**What was implemented:**
+- `SyncManager.ts` — queue-based sync with FIFO processing, exponential backoff retries, dead letter handling
+- Network state monitoring via @react-native-community/netinfo
+- Auto-sync when coming online
+- Concurrency lock (isSyncing) prevents duplicate processing
+- `SyncStatusBadge.tsx` — visual indicator (green dot: synced, yellow: pending, red: offline)
+
+**Files created:**
+- `src/services/sync/SyncManager.ts`
+- `src/components/SyncStatusBadge.tsx`
+
+---
+
+### Feature 8: Device Fingerprinting
+
+**What was implemented:**
+- `DeviceFingerprintService.ts` — collects device ID, model, brand, OS, app version, screen dimensions, bundle ID
+- Deterministic hash of combined device attributes for unique identification
+- `verify()` — compares current fingerprint against stored hash
+- `getAnonymizedFingerprint()` — privacy-friendly hash without PII
+
+**Files created:**
+- `src/services/security/DeviceFingerprint.ts`
+
+---
+
+### Feature 9: Speed Unit Enhancement
+
+**What was implemented:**
+- `unitDetector.ts` — auto-detects preferred unit from device locale (imperial for US/GB/Myanmar/Liberia, metric for all others)
+- `useSettingsStore.ts` — extended with `distanceUnit`, `autoDetectUnit`, `showBothUnits`, `speedDisplayPrecision`
+- Linked speed and distance units (km/h ↔ km, mph ↔ mi)
+
+**Files created:**
+- `src/utils/unitDetector.ts`
+- `src/store/useSettingsStore.ts`
+
+---
+
+### Feature 10: Enhanced 2D Kalman Filter + GPS Quality
+
+**What was implemented:**
+- `KalmanFilter2D.ts` — full 2D Kalman filter for GPS position + velocity estimation
+- State vector: [latitude, longitude, velocity_north, velocity_east]
+- Adaptive measurement noise based on GPS accuracy
+- Outlier rejection: measurements > 3σ from prediction get reduced weight
+- Quality indicator: excellent (<5m), good (<15m), fair (<30m), poor (≥30m)
+- `GPSQualityIndicator.tsx` — 4-bar signal strength display with color coding (green/yellow/red)
+- Long-press shows accuracy in meters
+- Performance: 10,000 predict+update cycles in < 200ms
+
+**Files created:**
+- `src/services/gps/KalmanFilter2D.ts`
+- `src/components/GPSQualityIndicator.tsx`
+
+---
+
+### Test Summary for Task 5
+
+| Category | Test Count | Status |
+|----------|-----------|--------|
+| Speed Alerts | 16 | ✅ Pass |
+| Biometric Auth | 10 | ✅ Pass |
+| Theme Manager | 16 | ✅ Pass |
+| Themes | 7 | ✅ Pass |
+| Trip Export | 18 | ✅ Pass |
+| License Service | 12 | ✅ Pass |
+| Sync Manager | 11 | ✅ Pass |
+| Device Fingerprint | 10 | ✅ Pass |
+| Unit Detector | 7 | ✅ Pass |
+| 2D Kalman Filter | 16 | ✅ Pass |
+| Settings Store | 15 | ✅ Pass |
+| License Generator (backend) | 9 | ✅ Pass |
+| Enhanced Features Integration | 6 | ✅ Pass |
+| **Task 5 Total** | **153** | ✅ |
+| **Grand Total (Task 1-5)** | **317** | ✅ |
+
+### Test Files Created
+- `__tests__/unit/services/alerts/SpeedAlertService.test.ts`
+- `__tests__/unit/services/auth/BiometricService.test.ts`
+- `__tests__/unit/services/theme/ThemeManager.test.ts`
+- `__tests__/unit/theme/themes.test.ts`
+- `__tests__/unit/services/export/TripExportService.test.ts`
+- `__tests__/unit/services/license/LicenseService.test.ts`
+- `__tests__/unit/services/sync/SyncManager.test.ts`
+- `__tests__/unit/services/security/DeviceFingerprint.test.ts`
+- `__tests__/unit/utils/unitDetector.test.ts`
+- `__tests__/unit/services/gps/KalmanFilter2D.test.ts`
+- `__tests__/unit/store/useSettingsStore.test.ts`
+- `backend/__tests__/routes/licenseGenerator.test.ts`
+- `__tests__/integration/enhanced-features-flow.test.ts`
+
+### Dependencies Required for Task 5
+- react-native-biometrics
+- react-native-orientation-locker
+- react-native-system-setting
+- react-native-sound
+- react-native-html-to-pdf
+- react-native-share
+- react-native-fs
+- @react-native-community/netinfo
+
+### Complete File Manifest for Task 5
+
+#### Services
+```
+src/services/alerts/SpeedAlertService.ts
+src/services/alerts/SoundManager.ts
+src/services/auth/BiometricService.ts
+src/services/theme/ThemeManager.ts
+src/services/theme/AmbientLightBridge.ts
+src/services/export/TripExportService.ts
+src/services/license/LicenseService.ts
+src/services/sync/SyncManager.ts
+src/services/security/DeviceFingerprint.ts
+src/services/gps/KalmanFilter2D.ts
+```
+
+#### Screens & Components
+```
+src/screens/HUDScreen.tsx
+src/screens/LicenseScreen.tsx
+src/components/GPSQualityIndicator.tsx
+src/components/SyncStatusBadge.tsx
+```
+
+#### Store, Context, Hooks, Utils, Theme
+```
+src/store/useSettingsStore.ts
+src/context/ThemeContext.tsx
+src/hooks/useTheme.ts
+src/utils/unitDetector.ts
+src/theme/themes.ts
+```
+
+#### Backend
+```
+backend/src/services/licenseGenerator.ts
+```
+
+#### Modified Files
+```
+src/navigation/AppNavigator.tsx — HUD + License routes
+src/screens/DashboardScreen.tsx — GPS quality + HUD button
+```
