@@ -743,3 +743,117 @@ backend/src/services/licenseGenerator.ts
 src/navigation/AppNavigator.tsx — HUD + License routes
 src/screens/DashboardScreen.tsx — GPS quality + HUD button
 ```
+
+---
+
+## TASK 6 — Android Build Fix + Dependency Compatibility + CI/CD
+
+### Status: COMPLETE
+
+---
+
+### Part A: Missing Android Build Infrastructure
+
+**What was implemented:**
+- Complete Android Gradle build system was missing from the repo — all files created from the official React Native 0.76.6 community template
+- `android/build.gradle` — project-level Gradle config (compileSdk 35, targetSdk 34, Kotlin 1.9.24, NDK 26.1.10909125)
+- `android/app/build.gradle` — app-level Gradle config with React Native plugin, Hermes, Android Auto `car-app` dependency
+- `android/settings.gradle` — Gradle settings with React Native autolinking plugin
+- `android/gradle.properties` — AndroidX, Jetifier, new architecture, Hermes flags
+- `android/gradlew` + `android/gradlew.bat` — Gradle 8.10.2 wrapper scripts
+- `android/gradle/wrapper/gradle-wrapper.jar` + `gradle-wrapper.properties` — Gradle wrapper distribution config
+- `android/app/src/main/java/com/average/MainActivity.kt` — React Native activity with Fabric support
+- `android/app/src/main/java/com/average/MainApplication.kt` — React Native application entry point with SoLoader init
+- `android/app/src/main/res/values/strings.xml` — app name resource
+- `android/app/src/main/res/values/styles.xml` — AppTheme with DayNight.NoActionBar
+- `android/app/src/main/res/drawable/rn_edit_text_material.xml` — TextInput fix drawable
+- `android/app/src/main/res/mipmap-*/ic_launcher.png` + `ic_launcher_round.png` — placeholder launcher icons (all 5 densities)
+- `android/app/src/debug/AndroidManifest.xml` — debug overlay permission
+- `android/app/debug.keystore` — debug signing key
+
+**Files created:**
+- `android/build.gradle`
+- `android/settings.gradle`
+- `android/gradle.properties`
+- `android/gradlew`, `android/gradlew.bat`
+- `android/gradle/wrapper/gradle-wrapper.jar`
+- `android/gradle/wrapper/gradle-wrapper.properties`
+- `android/app/build.gradle`
+- `android/app/debug.keystore`
+- `android/app/src/debug/AndroidManifest.xml`
+- `android/app/src/main/java/com/average/MainActivity.kt`
+- `android/app/src/main/java/com/average/MainApplication.kt`
+- `android/app/src/main/res/values/strings.xml`
+- `android/app/src/main/res/values/styles.xml`
+- `android/app/src/main/res/drawable/rn_edit_text_material.xml`
+- `android/app/src/main/res/mipmap-mdpi/ic_launcher.png`
+- `android/app/src/main/res/mipmap-mdpi/ic_launcher_round.png`
+- `android/app/src/main/res/mipmap-hdpi/ic_launcher.png`
+- `android/app/src/main/res/mipmap-hdpi/ic_launcher_round.png`
+- `android/app/src/main/res/mipmap-xhdpi/ic_launcher.png`
+- `android/app/src/main/res/mipmap-xhdpi/ic_launcher_round.png`
+- `android/app/src/main/res/mipmap-xxhdpi/ic_launcher.png`
+- `android/app/src/main/res/mipmap-xxhdpi/ic_launcher_round.png`
+- `android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png`
+- `android/app/src/main/res/mipmap-xxxhdpi/ic_launcher_round.png`
+
+---
+
+### Part B: Dependency Compatibility Fixes
+
+**What was fixed:**
+- `react-test-renderer` — downgraded from `^19.2.4` to `^18.3.1` to match `react@18.3.1` (peer dependency conflict)
+- `react-native-reanimated` — pinned to `3.16.7` (was resolving to 3.19.5 which requires RN 0.78+, incompatible with RN 0.76.6)
+- `react-native-screens` — pinned to `4.4.0` (was resolving to 4.23.0 which has codegen `Unknown prop type for "environment"` error with RN 0.76.6's codegen)
+- Added `@react-native-community/cli` and `@react-native-community/cli-platform-android` as devDependencies (required for `react-native config` autolinking)
+
+**Files modified:**
+- `package.json`
+
+---
+
+### Part C: AndroidManifest.xml Fix
+
+**What was fixed:**
+- Removed deprecated `package="com.average"` attribute from `AndroidManifest.xml` — namespace is now declared in `app/build.gradle` via `namespace "com.average"` (required by AGP 8.x)
+
+**Files modified:**
+- `android/app/src/main/AndroidManifest.xml`
+
+---
+
+### Part D: .gitignore Update
+
+**What was fixed:**
+- Added `android/app/.cxx/` and `android/app/build/` to `.gitignore` to prevent native build artifacts from being committed
+
+**Files modified:**
+- `.gitignore`
+
+---
+
+### Part E: GitHub Actions CI/CD
+
+**What was fixed:**
+- Updated `.github/workflows/android-build.yml`:
+  - Upgraded from deprecated `actions/checkout@v3` to `@v4`
+  - Upgraded from deprecated `actions/setup-java@v3` to `@v4`
+  - Upgraded from deprecated `actions/setup-node@v3` to `@v4`
+  - Changed Node.js version from 18 to 20 (matching CI pipeline)
+  - Changed `npm install` to `npm ci` for deterministic installs
+  - Added npm cache support
+  - Added triggers for push/PR to main and develop branches (in addition to manual dispatch)
+
+**Files modified:**
+- `.github/workflows/android-build.yml`
+
+---
+
+### Build Verification
+
+| Check | Result |
+|-------|--------|
+| `npm install` | ✅ No peer dependency conflicts |
+| `npx react-native config` | ✅ Correct packageName, sourceDir |
+| `./gradlew assembleDebug` | ✅ BUILD SUCCESSFUL (486 tasks) |
+| Debug APK created | ✅ `android/app/build/outputs/apk/debug/app-debug.apk` |
