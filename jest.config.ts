@@ -6,7 +6,7 @@ const config: Config = {
     '^.+\\.tsx?$': ['ts-jest', { tsconfig: 'tsconfig.json' }],
   },
   moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'json'],
-  setupFilesAfterSetup: ['<rootDir>/jest.setup.ts'],
+  setupFilesAfterEnv: ['<rootDir>/jest.setup.ts'],
   moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/src/$1',
   },
@@ -24,7 +24,7 @@ const config: Config = {
       statements: 80,
     },
   },
-  testPathIgnorePatterns: ['/node_modules/', '/e2e/'],
+  testPathIgnorePatterns: ['/node_modules/', '/e2e/', '/__tests__/build/'],
 };
 
 export default config;

@@ -62,13 +62,13 @@ jest.mock('react-native-reanimated', () => {
 // Mock react-native-haptic-feedback
 jest.mock('react-native-haptic-feedback', () => ({
   trigger: jest.fn(),
-}));
+}), { virtual: true });
 
 // Mock react-native-keep-awake
 jest.mock('react-native-keep-awake', () => ({
   activate: jest.fn(),
   deactivate: jest.fn(),
-}));
+}), { virtual: true });
 
 // Mock react-native-sqlite-storage
 jest.mock('react-native-sqlite-storage', () => ({
