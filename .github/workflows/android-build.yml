@@ -28,7 +28,17 @@ jobs:
           cache: 'npm'
 
       - name: Install Dependencies
-        run: npm ci
+        run: npm ci --legacy-peer-deps
+
+      - name: Bundle JS for Android
+        run: |
+          mkdir -p android/app/src/main/assets
+          npx react-native bundle \
+            --platform android \
+            --dev false \
+            --entry-file index.js \
+            --bundle-output android/app/src/main/assets/index.android.bundle \
+            --assets-dest android/app/src/main/res
 
       - name: Make Gradle Executable
         run: chmod +x android/gradlew
@@ -41,4 +51,17 @@ jobs:
         with:
           name: Average-App-Debug
           path: android/app/build/outputs/apk/debug/app-debug.apk
+
+      - name: Generate JWT Secret for Railway
+        run: |
+          echo "============================================"
+          echo "  Generated JWT_SECRET for Railway deploy"
+          echo "============================================"
+          echo ""
+          JWT=$(openssl rand -base64 32)
+          echo "JWT_SECRET=$JWT"
+          echo ""
+          echo "Copy the value above and paste it into"
+          echo "Railway → Variables → JWT_SECRET"
+          echo "============================================"
 

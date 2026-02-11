@@ -70,14 +70,6 @@ const LoginScreen: React.FC = () => {
               <Text style={styles.buttonText}>Login</Text>
             )}
           </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.linkButton}
-            onPress={() => navigation.navigate('Register')}>
-            <Text style={styles.linkText}>
-              Don't have an account? Register
-            </Text>
-          </TouchableOpacity>
         </View>
       </View>
     </KeyboardAvoidingView>
@@ -144,14 +136,6 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     fontSize: 16,
     fontWeight: '600',
-  },
-  linkButton: {
-    marginTop: 16,
-    alignItems: 'center',
-  },
-  linkText: {
-    color: '#a0a0a0',
-    fontSize: 14,
   },
 });
 

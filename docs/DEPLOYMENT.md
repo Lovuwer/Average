@@ -25,6 +25,8 @@
    PORT=3000
    HOST=0.0.0.0
    CORS_ORIGIN=*
+   ADMIN_EMAIL=your-email@example.com
+   ADMIN_PASSWORD_HASH=<generate bcrypt hash — see docs/RAILWAY_HOSTING.md Step 5>
    ```
 5. **Deploy**: Railway auto-detects the Dockerfile and deploys
 6. **Verify**: Hit `https://<your-app>.railway.app/health`
@@ -103,3 +105,5 @@ xcodebuild -workspace Average.xcworkspace -scheme Average -configuration Release
 | `PORT` | Server port | `3000` |
 | `HOST` | Server host | `0.0.0.0` |
 | `CORS_ORIGIN` | CORS allowed origins | `*` |
+| `ADMIN_EMAIL` | Single-user login email | Required |
+| `ADMIN_PASSWORD_HASH` | Bcrypt hash of admin password | Required |
