@@ -52,10 +52,12 @@ class SpeedEngine {
   private updateCallback: SpeedUpdateCallback | null = null;
   private durationInterval: ReturnType<typeof setInterval> | null = null;
   
-  // Stationary detection and accuracy gating
+  // GPS accuracy gating
+  private readonly MIN_GPS_ACCURACY = 20; // meters - reject readings with poor accuracy
+  
+  // Stationary detection
   private stationaryCount: number = 0;
   private readonly SPEED_DEAD_ZONE = 0.5; // m/s (~1.8 km/h)
-  private readonly MIN_GPS_ACCURACY = 20; // meters
   private readonly STATIONARY_THRESHOLD = 0.3; // m/s
   private readonly STATIONARY_COUNT_LIMIT = 3;
 
@@ -196,22 +198,8 @@ class SpeedEngine {
       rawSpeed = 0;
     }
 
-    // Stationary detection - track consecutive low-speed readings
-    if (rawSpeed < this.STATIONARY_THRESHOLD) {
-      this.stationaryCount++;
-      if (this.stationaryCount >= this.STATIONARY_COUNT_LIMIT) {
-        // Force speed to 0 and reset Kalman filter when stationary
-        this.kalmanFilter.reset(0);
-        this.updateSpeedStatistics(0, position);
-        return;
-      }
-    } else {
-      // Moving - reset stationary counter
-      this.stationaryCount = 0;
-    }
-
-    // Speed confidence check - cross-check GPS speed with Haversine calculation
-    if (position.speed >= 0 && this.lastPosition) {
+    // Speed confidence check - cross-check all speeds with Haversine calculation
+    if (this.lastPosition && rawSpeed > 0) {
       const haversineSpeed = calculateSpeed(
         this.lastPosition.latitude,
         this.lastPosition.longitude,
@@ -227,6 +215,20 @@ class SpeedEngine {
       if (avgSpeed > 0 && speedDiff / avgSpeed > 0.5) {
         rawSpeed = Math.min(rawSpeed, haversineSpeed);
       }
+    }
+
+    // Stationary detection - track consecutive low-speed readings
+    if (rawSpeed < this.STATIONARY_THRESHOLD) {
+      this.stationaryCount++;
+      if (this.stationaryCount >= this.STATIONARY_COUNT_LIMIT) {
+        // Force speed to 0 and reset Kalman filter when stationary
+        this.kalmanFilter.reset(0);
+        this.updateSpeedStatistics(0, position);
+        return;
+      }
+    } else {
+      // Moving - reset stationary counter
+      this.stationaryCount = 0;
     }
 
     // Apply Kalman filter
