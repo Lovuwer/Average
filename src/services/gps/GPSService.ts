@@ -59,7 +59,7 @@ class GPSService {
       },
       {
         enableHighAccuracy: true,
-        distanceFilter: 1,
+        distanceFilter: 0,
         interval: 1000,
         fastestInterval: 500,
         showsBackgroundLocationIndicator: true,

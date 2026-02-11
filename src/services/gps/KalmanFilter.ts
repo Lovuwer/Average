@@ -9,8 +9,8 @@ export class KalmanFilter {
   private measurementNoise: number;
 
   constructor(
-    processNoise: number = 0.008,
-    measurementNoise: number = 0.5,
+    processNoise: number = 0.1,
+    measurementNoise: number = 0.3,
     estimatedError: number = 1.0,
     initialEstimate: number = 0,
   ) {

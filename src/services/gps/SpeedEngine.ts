@@ -51,6 +51,13 @@ class SpeedEngine {
   private speedHistoryBuffer: number[] = [];
   private updateCallback: SpeedUpdateCallback | null = null;
   private durationInterval: ReturnType<typeof setInterval> | null = null;
+  
+  // Stationary detection and accuracy gating
+  private stationaryCount: number = 0;
+  private readonly SPEED_DEAD_ZONE = 0.5; // m/s (~1.8 km/h)
+  private readonly MIN_GPS_ACCURACY = 20; // meters
+  private readonly STATIONARY_THRESHOLD = 0.3; // m/s
+  private readonly STATIONARY_COUNT_LIMIT = 3;
 
   constructor() {
     this.kalmanFilter = new KalmanFilter();
@@ -138,6 +145,7 @@ class SpeedEngine {
     this.pauseStart = null;
     this.startTime = null;
     this.isPausedState = false;
+    this.stationaryCount = 0;
   }
 
   getCurrentData(): SpeedData {
@@ -165,6 +173,11 @@ class SpeedEngine {
   }
 
   private processPosition(position: GPSPosition): void {
+    // GPS accuracy gating - skip low-quality readings
+    if (position.accuracy > this.MIN_GPS_ACCURACY) {
+      return;
+    }
+
     let rawSpeed: number;
 
     if (position.speed >= 0) {
@@ -183,10 +196,52 @@ class SpeedEngine {
       rawSpeed = 0;
     }
 
-    // Apply Kalman filter
-    const filteredSpeed = this.kalmanFilter.filter(rawSpeed);
-    const clampedSpeed = Math.max(0, filteredSpeed);
+    // Stationary detection - track consecutive low-speed readings
+    if (rawSpeed < this.STATIONARY_THRESHOLD) {
+      this.stationaryCount++;
+      if (this.stationaryCount >= this.STATIONARY_COUNT_LIMIT) {
+        // Force speed to 0 and reset Kalman filter when stationary
+        this.kalmanFilter.reset(0);
+        this.updateSpeedStatistics(0, position);
+        return;
+      }
+    } else {
+      // Moving - reset stationary counter
+      this.stationaryCount = 0;
+    }
 
+    // Speed confidence check - cross-check GPS speed with Haversine calculation
+    if (position.speed >= 0 && this.lastPosition) {
+      const haversineSpeed = calculateSpeed(
+        this.lastPosition.latitude,
+        this.lastPosition.longitude,
+        this.lastPosition.timestamp,
+        position.latitude,
+        position.longitude,
+        position.timestamp,
+      );
+
+      // If speeds differ by more than 50%, prefer the lower value
+      const speedDiff = Math.abs(rawSpeed - haversineSpeed);
+      const avgSpeed = (rawSpeed + haversineSpeed) / 2;
+      if (avgSpeed > 0 && speedDiff / avgSpeed > 0.5) {
+        rawSpeed = Math.min(rawSpeed, haversineSpeed);
+      }
+    }
+
+    // Apply Kalman filter
+    let filteredSpeed = this.kalmanFilter.filter(rawSpeed);
+
+    // Apply dead zone to eliminate GPS jitter when nearly stationary
+    if (filteredSpeed < this.SPEED_DEAD_ZONE) {
+      filteredSpeed = 0;
+    }
+
+    const clampedSpeed = Math.max(0, filteredSpeed);
+    this.updateSpeedStatistics(clampedSpeed, position);
+  }
+
+  private updateSpeedStatistics(speed: number, position: GPSPosition): void {
     // Update distance
     if (this.lastPosition) {
       const dist = haversineDistance(
@@ -199,16 +254,16 @@ class SpeedEngine {
     }
 
     // Update statistics
-    this.speedReadings.push(clampedSpeed);
-    this.speedSum += clampedSpeed;
+    this.speedReadings.push(speed);
+    this.speedSum += speed;
     this.readingCount++;
 
-    if (clampedSpeed > this.maxSpeedValue) {
-      this.maxSpeedValue = clampedSpeed;
+    if (speed > this.maxSpeedValue) {
+      this.maxSpeedValue = speed;
     }
 
     // Keep last 60 readings for chart
-    this.speedHistoryBuffer.push(clampedSpeed);
+    this.speedHistoryBuffer.push(speed);
     if (this.speedHistoryBuffer.length > 60) {
       this.speedHistoryBuffer.shift();
     }
