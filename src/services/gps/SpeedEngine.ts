@@ -202,32 +202,7 @@ class SpeedEngine {
       if (this.stationaryCount >= this.STATIONARY_COUNT_LIMIT) {
         // Force speed to 0 and reset Kalman filter when stationary
         this.kalmanFilter.reset(0);
-        const clampedSpeed = 0;
-
-        // Update distance (should be minimal when stationary)
-        if (this.lastPosition) {
-          const dist = haversineDistance(
-            this.lastPosition.latitude,
-            this.lastPosition.longitude,
-            position.latitude,
-            position.longitude,
-          );
-          this.totalDistanceValue += dist;
-        }
-
-        // Update statistics with zero speed
-        this.speedReadings.push(clampedSpeed);
-        this.speedSum += clampedSpeed;
-        this.readingCount++;
-
-        // Keep last 60 readings for chart
-        this.speedHistoryBuffer.push(clampedSpeed);
-        if (this.speedHistoryBuffer.length > 60) {
-          this.speedHistoryBuffer.shift();
-        }
-
-        this.lastPosition = position;
-        this.emitUpdate();
+        this.updateSpeedStatistics(0, position);
         return;
       }
     } else {
@@ -263,7 +238,10 @@ class SpeedEngine {
     }
 
     const clampedSpeed = Math.max(0, filteredSpeed);
+    this.updateSpeedStatistics(clampedSpeed, position);
+  }
 
+  private updateSpeedStatistics(speed: number, position: GPSPosition): void {
     // Update distance
     if (this.lastPosition) {
       const dist = haversineDistance(
@@ -276,16 +254,16 @@ class SpeedEngine {
     }
 
     // Update statistics
-    this.speedReadings.push(clampedSpeed);
-    this.speedSum += clampedSpeed;
+    this.speedReadings.push(speed);
+    this.speedSum += speed;
     this.readingCount++;
 
-    if (clampedSpeed > this.maxSpeedValue) {
-      this.maxSpeedValue = clampedSpeed;
+    if (speed > this.maxSpeedValue) {
+      this.maxSpeedValue = speed;
     }
 
     // Keep last 60 readings for chart
-    this.speedHistoryBuffer.push(clampedSpeed);
+    this.speedHistoryBuffer.push(speed);
     if (this.speedHistoryBuffer.length > 60) {
       this.speedHistoryBuffer.shift();
     }

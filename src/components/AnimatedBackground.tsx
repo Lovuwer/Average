@@ -117,9 +117,11 @@ const styles = StyleSheet.create({
   },
   rayBar: {
     position: 'absolute',
-    width: SCREEN_WIDTH * 2, // Extends off screen
-    backgroundColor: COLORS.rayColor,
+    // Bars are 2x screen width and positioned off-center to create the appearance
+    // of diagonal rays extending beyond the visible screen boundaries
+    width: SCREEN_WIDTH * 2,
     left: -SCREEN_WIDTH / 2,
+    backgroundColor: COLORS.rayColor,
   },
 });
 
