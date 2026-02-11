@@ -21,6 +21,11 @@ export const COLORS = {
   speedSafe: '#44FF88',
   speedModerate: '#FFCC00',
   speedHigh: '#FF4444',
+  // Animated background (cnrad.dev-inspired)
+  rayColor: 'rgba(255,255,255,0.03)',
+  rayGradientStart: 'rgba(255,255,255,0.04)',
+  rayGradientEnd: '#0A0A0A',
+  backgroundOverlayOpacity: 0.15,
 };
 
 export const SPACING = {
