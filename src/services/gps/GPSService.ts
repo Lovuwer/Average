@@ -12,6 +12,8 @@ export interface GPSPosition {
   altitude: number;
   accuracy: number;
   timestamp: number;
+  bearing: number; // degrees (0-360), -1 if unavailable
+  altitudeAccuracy: number; // meters, -1 if unavailable
 }
 
 type GPSCallback = (position: GPSPosition) => void;
@@ -52,6 +54,8 @@ class GPSService {
           altitude: position.coords.altitude ?? 0,
           accuracy: position.coords.accuracy,
           timestamp: position.timestamp,
+          bearing: position.coords.heading ?? -1,
+          altitudeAccuracy: (position.coords as any).altitudeAccuracy ?? -1,
         });
       },
       (error: GeoError) => {
@@ -60,8 +64,8 @@ class GPSService {
       {
         enableHighAccuracy: true,
         distanceFilter: 0,
-        interval: 1000,
-        fastestInterval: 500,
+        interval: 500,
+        fastestInterval: 250,
         showsBackgroundLocationIndicator: true,
         forceRequestLocation: true,
       },

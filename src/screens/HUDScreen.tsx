@@ -5,7 +5,7 @@ import { useSettingsStore } from '../store/useSettingsStore';
 import { msToKmh, msToMph } from '../services/gps/SpeedEngine';
 
 const HUDScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
-  const { currentSpeed, averageSpeed, speedUnit } = useSpeedStore();
+  const { currentSpeed, averageSpeed, speedUnit, primarySource } = useSpeedStore();
   const { hudColor } = useSettingsStore();
   const [lastTap, setLastTap] = useState(0);
 
@@ -55,6 +55,15 @@ const HUDScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
           ]}>
           AVG {displayAvg} {unitLabel}
         </Text>
+        {primarySource === 'dead_reckoning' && (
+          <Text
+            style={[
+              styles.estLabel,
+              { transform: [{ scaleX: -1 }] },
+            ]}>
+            EST
+          </Text>
+        )}
       </View>
     </Pressable>
   );
@@ -85,6 +94,12 @@ const styles = StyleSheet.create({
     color: 'rgba(255,255,255,0.5)',
     marginTop: 20,
     fontWeight: '300',
+  },
+  estLabel: {
+    fontSize: 16,
+    color: '#FFD700',
+    marginTop: 10,
+    fontWeight: '500',
   },
 });
 

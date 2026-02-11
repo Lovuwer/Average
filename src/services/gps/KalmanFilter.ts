@@ -40,4 +40,12 @@ export class KalmanFilter {
   getEstimate(): number {
     return this.estimate;
   }
+
+  setProcessNoise(noise: number): void {
+    this.processNoise = noise;
+  }
+
+  setMeasurementNoise(noise: number): void {
+    this.measurementNoise = noise;
+  }
 }

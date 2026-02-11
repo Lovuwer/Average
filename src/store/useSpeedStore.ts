@@ -10,6 +10,12 @@ interface SpeedState {
   isTracking: boolean;
   isPaused: boolean;
   speedUnit: 'kmh' | 'mph';
+  confidence: 'low' | 'medium' | 'high';
+  motionState: 'stationary' | 'walking' | 'running' | 'vehicle' | 'gps_dead_reckoning';
+  primarySource: string;
+  gpsAccuracy: number | null;
+  stepFrequency: number;
+  sensorHealth: { gps: boolean; accelerometer: boolean; gyroscope: boolean; pedometer: boolean; barometer: boolean };
   updateSpeed: (data: {
     currentSpeed: number;
     averageSpeed: number;
@@ -17,6 +23,12 @@ interface SpeedState {
     totalDistance: number;
     tripDuration: number;
     speedHistory: number[];
+    confidence?: 'low' | 'medium' | 'high';
+    primarySource?: string;
+    motionState?: 'stationary' | 'walking' | 'running' | 'vehicle' | 'gps_dead_reckoning';
+    gpsAccuracy?: number | null;
+    stepFrequency?: number;
+    sensorHealth?: { gps: boolean; accelerometer: boolean; gyroscope: boolean; pedometer: boolean; barometer: boolean };
   }) => void;
   setTracking: (tracking: boolean) => void;
   setPaused: (paused: boolean) => void;
@@ -34,6 +46,12 @@ export const useSpeedStore = create<SpeedState>((set) => ({
   isTracking: false,
   isPaused: false,
   speedUnit: 'kmh',
+  confidence: 'low',
+  motionState: 'stationary',
+  primarySource: 'gps',
+  gpsAccuracy: null,
+  stepFrequency: 0,
+  sensorHealth: { gps: false, accelerometer: false, gyroscope: false, pedometer: false, barometer: false },
 
   updateSpeed: (data) =>
     set({
@@ -43,6 +61,12 @@ export const useSpeedStore = create<SpeedState>((set) => ({
       distance: data.totalDistance,
       duration: data.tripDuration,
       speedHistory: data.speedHistory,
+      confidence: data.confidence ?? 'low',
+      primarySource: data.primarySource ?? 'gps',
+      motionState: data.motionState ?? 'stationary',
+      gpsAccuracy: data.gpsAccuracy ?? null,
+      stepFrequency: data.stepFrequency ?? 0,
+      sensorHealth: data.sensorHealth ?? { gps: false, accelerometer: false, gyroscope: false, pedometer: false, barometer: false },
     }),
 
   setTracking: (tracking) => set({ isTracking: tracking }),
@@ -63,5 +87,11 @@ export const useSpeedStore = create<SpeedState>((set) => ({
       speedHistory: [],
       isTracking: false,
       isPaused: false,
+      confidence: 'low',
+      motionState: 'stationary',
+      primarySource: 'gps',
+      gpsAccuracy: null,
+      stepFrequency: 0,
+      sensorHealth: { gps: false, accelerometer: false, gyroscope: false, pedometer: false, barometer: false },
     }),
 }));
