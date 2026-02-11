@@ -7,6 +7,38 @@ jest.mock('../../../../src/services/gps/GPSService', () => ({
   },
 }));
 
+jest.mock('../../../../src/services/sensors/StepDetectorService', () => ({
+  stepDetectorService: {
+    startListening: jest.fn(),
+    stopListening: jest.fn(),
+    isAvailable: jest.fn(() => Promise.resolve(false)),
+    getStepFrequency: jest.fn(() => 0),
+    getEstimatedSpeed: jest.fn(() => 0),
+    getCadence: jest.fn(() => null),
+    getPace: jest.fn(() => null),
+    getIosDistance: jest.fn(() => null),
+  },
+}));
+
+jest.mock('../../../../src/services/sensors/AccelerometerService', () => ({
+  accelerometerService: {
+    startListening: jest.fn(),
+    stopListening: jest.fn(),
+    getCurrentState: jest.fn(() => 'stationary'),
+    getAccelMagnitude: jest.fn(() => 0),
+    getAccelVariance: jest.fn(() => 0),
+    getLinearAcceleration: jest.fn(() => ({ x: 0, y: 0, z: 0 })),
+    getYawRate: jest.fn(() => 0),
+    getHeadingDelta: jest.fn(() => 0),
+    resetHeadingDelta: jest.fn(),
+    getAltitudeChange: jest.fn(() => 0),
+    resetAltitude: jest.fn(),
+    isAccelerometerActive: jest.fn(() => false),
+    isGyroscopeActive: jest.fn(() => false),
+    isBarometerActive: jest.fn(() => false),
+  },
+}));
+
 import {
   msToKmh,
   msToMph,
@@ -90,6 +122,13 @@ describe('SpeedEngine', () => {
       expect(summary).toHaveProperty('totalDistance');
       expect(summary).toHaveProperty('tripDuration');
       expect(summary).toHaveProperty('speedHistory');
+      // Fusion metadata
+      expect(summary).toHaveProperty('confidence');
+      expect(summary).toHaveProperty('primarySource');
+      expect(summary).toHaveProperty('motionState');
+      expect(summary).toHaveProperty('gpsAccuracy');
+      expect(summary).toHaveProperty('stepFrequency');
+      expect(summary).toHaveProperty('sensorHealth');
     });
 
     it('pause() sets paused state', () => {
@@ -136,6 +175,13 @@ describe('SpeedEngine', () => {
       expect(data.totalDistance).toBe(0);
       expect(data.tripDuration).toBe(0);
       expect(data.speedHistory).toEqual([]);
+      // Fusion metadata defaults
+      expect(data.confidence).toBe('low');
+      expect(data.motionState).toBe('stationary');
+      expect(data.primarySource).toBe('gps');
+      expect(data.gpsAccuracy).toBeNull();
+      expect(data.stepFrequency).toBe(0);
+      expect(data.sensorHealth).toBeDefined();
     });
   });
 });

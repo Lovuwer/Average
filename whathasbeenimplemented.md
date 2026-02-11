@@ -972,3 +972,206 @@ src/screens/DashboardScreen.tsx — GPS quality + HUD button
    - Smooth animations with organic feel (varying durations)
 
 ---
+
+## TASK 7 — Full Sensor Fusion Engine (GPS + Accelerometer + Gyroscope + Pedometer + Barometer)
+
+### Status: COMPLETE
+
+---
+
+### Architecture: 5-Mode State Machine
+
+The sensor fusion engine provides instant, accurate speed detection for ALL motion types with smooth transitions. It operates a state machine with 5 modes:
+
+| Mode | Speed Range | Primary Source | Secondary Source | Tertiary |
+|------|------------|---------------|-----------------|----------|
+| Stationary | 0 km/h | Accelerometer (no movement) | — | — |
+| Walking | 3–7 km/h | Pedometer + Stride | GPS (refine) | Accel (instant detect) |
+| Running | 7–18 km/h | Pedometer + Stride | GPS (refine) | Accel (instant detect) |
+| Driving | 0–250+ km/h | GPS (authoritative) | Accel (fill GPS gaps) | Gyro (cornering) |
+| GPS Dead Reckoning | any | Last GPS + Accel integration | Gyro (heading) | Baro (elevation) |
+
+**Vehicle Mode Design**: In a car, there are no steps — the pedometer produces nothing. GPS is the AUTHORITATIVE source above ~15 km/h. The fusion engine detects vehicle mode and switches to GPS-dominant operation. The gyroscope detects cornering/turning for dead-reckoning during GPS tunnels.
+
+**Dead Reckoning Algorithm**: When GPS is lost for >3 seconds in vehicle mode, the engine uses the last known GPS speed with 2% per second decay. Maximum DR duration is 60 seconds, after which speed fades to 0. Confidence is marked as 'low' during DR.
+
+**Adaptive Kalman Filter**: The filter's noise parameters change dynamically based on motion state:
+- Stationary: processNoise=0.01, measurementNoise=0.5 (very stable, reject noise)
+- Just started moving: processNoise=0.8, measurementNoise=0.15 (adapt fast)
+- Steady walking (>3s): processNoise=0.05, measurementNoise=0.2 (smooth)
+- Vehicle accelerating: processNoise=0.5, measurementNoise=0.1 (speed changing fast)
+- Vehicle cruising: processNoise=0.03, measurementNoise=0.1 (very smooth)
+- Vehicle braking: processNoise=0.6, measurementNoise=0.1 (speed dropping fast)
+- GPS dead reckoning: processNoise=0.3, measurementNoise=0.8 (don't trust DR much)
+
+**Backward Compatibility**: If ALL sensors fail, the app degrades to pure GPS mode — same behavior as before Task 7.
+
+---
+
+### Part A: New Dependencies
+
+**Installed:**
+- `react-native-sensors` v7.3.6 — provides accelerometer, gyroscope, barometer subscriptions via RxJS Observables
+
+**iOS Permissions:**
+- `NSMotionUsageDescription` added to `ios/Average/Info.plist`
+
+**Android Permissions:**
+- `HIGH_SAMPLING_RATE_SENSORS` — allows >200Hz on Android 12+
+- `ACTIVITY_RECOGNITION` — required for step detector on Android 10+
+
+---
+
+### Part B: Native Step Detector Module (Android)
+
+**Files created:**
+- `android/app/src/main/java/com/average/sensors/StepDetectorModule.kt` — NativeModule bridging TYPE_STEP_DETECTOR and TYPE_STEP_COUNTER sensors to JS, emits onStepDetected and onStepCount events
+- `android/app/src/main/java/com/average/sensors/StepDetectorPackage.kt` — ReactPackage registering StepDetectorModule
+
+**Files modified:**
+- `android/app/src/main/java/com/average/MainApplication.kt` — added StepDetectorPackage to getPackages()
+- `android/app/src/main/AndroidManifest.xml` — added ACTIVITY_RECOGNITION and HIGH_SAMPLING_RATE_SENSORS permissions
+
+---
+
+### Part C: Native Step Detector Module (iOS)
+
+**Files created:**
+- `ios/Average/Sensors/StepDetectorModule.swift` — CMPedometer-based step detector with cadence, pace, and distance data
+- `ios/Average/Sensors/StepDetectorModule.m` — Objective-C bridge for RCT_EXTERN_MODULE
+- `ios/Average/Average-Bridging-Header.h` — Swift/ObjC bridging header
+
+**Files modified:**
+- `ios/Average/Info.plist` — added NSMotionUsageDescription
+
+---
+
+### Part D: TypeScript Sensor Services
+
+**Files created:**
+- `src/services/sensors/StepDetectorService.ts` — wraps native StepDetectorModule with clean TypeScript API (step frequency, estimated speed, adaptive stride model, iOS cadence/pace preference)
+- `src/services/sensors/AccelerometerService.ts` — accelerometer (gravity removal, motion classification), gyroscope (yaw rate, heading), barometer (altitude change), with debounced state machine
+- `src/services/sensors/SensorFusionEngine.ts` — central intelligence combining ALL sensor data: 5-mode state machine, phased walking/running speed, GPS-authoritative vehicle mode, dead reckoning, adaptive Kalman, distance calculation
+
+---
+
+### Part E: Modified Existing Files
+
+**`src/services/gps/SpeedEngine.ts`** — refactored as thin wrapper around SensorFusionEngine, preserving existing API (start/stop/pause/resume/getCurrentData). SpeedData interface extended with confidence, primarySource, motionState, gpsAccuracy, stepFrequency, sensorHealth fields.
+
+**`src/services/gps/KalmanFilter.ts`** — added setProcessNoise() and setMeasurementNoise() methods for dynamic tuning by SensorFusionEngine
+
+**`src/services/gps/GPSService.ts`** — faster GPS updates (interval: 500ms, fastestInterval: 250ms), extended GPSPosition interface with bearing and altitudeAccuracy fields
+
+**`src/store/useSpeedStore.ts`** — added fusion metadata fields (confidence, motionState, primarySource, gpsAccuracy, stepFrequency, sensorHealth) with defaults and reset
+
+**`src/hooks/useSpeed.ts`** — exposes fusion metadata (confidence, motionState, primarySource, gpsAccuracy, stepFrequency, sensorHealth) to UI consumers
+
+**`src/screens/DashboardScreen.tsx`** — replaced GPSQualityIndicator with SensorStatusIndicator, added motion state labels (🚶 Walking, 🏃 Running, 🚗 Driving, 📡 Estimated)
+
+**`src/screens/HUDScreen.tsx`** — shows "EST" label in yellow during dead reckoning mode
+
+**`jest.setup.ts`** — added mocks for react-native-sensors and StepDetectorModule native module
+
+**`jest.config.ts`** — updated ts-jest config for JSX transformation in component tests
+
+---
+
+### Part F: New UI Component
+
+**`src/components/SensorStatusIndicator.tsx`** — multi-sensor status display replacing GPSQualityIndicator:
+- GPS signal bars (4 levels based on accuracy)
+- Sensor dots (accelerometer always, pedometer during walking/running)
+- Confidence indicator dot (green/yellow/red)
+- Long-press reveals accuracy and primary source
+
+---
+
+### Test Summary for Task 7
+
+| Category | Test Count | Status |
+|----------|-----------|--------|
+| StepDetectorService | 13 | ✅ Pass |
+| AccelerometerService | 12 | ✅ Pass |
+| SensorFusionEngine | 17 | ✅ Pass |
+| SensorStatusIndicator | 7 | ✅ Pass |
+| KalmanFilter (new adaptive tests) | +4 | ✅ Pass |
+| SpeedEngine (updated for fusion) | 12 | ✅ Pass |
+| Integration (updated for fusion) | 7 | ✅ Pass |
+| **Task 7 Total** | **53 new** | ✅ |
+| **Grand Total (Tasks 1-7)** | **370** | ✅ |
+
+### Test Files Created
+- `__tests__/unit/services/sensors/StepDetectorService.test.ts`
+- `__tests__/unit/services/sensors/AccelerometerService.test.ts`
+- `__tests__/unit/services/sensors/SensorFusionEngine.test.ts`
+- `__tests__/components/SensorStatusIndicator.test.tsx`
+
+### Test Files Modified
+- `__tests__/unit/services/gps/KalmanFilter.test.ts` — added adaptive setter tests
+- `__tests__/unit/services/gps/SpeedEngine.test.ts` — updated for fusion delegation, added mock for sensor services
+- `__tests__/integration/speed-tracking-flow.test.ts` — updated for sensor fusion, added sensor service mocks
+
+---
+
+### Complete File Manifest for Task 7
+
+#### Native Modules (Android)
+```
+android/app/src/main/java/com/average/sensors/StepDetectorModule.kt
+android/app/src/main/java/com/average/sensors/StepDetectorPackage.kt
+```
+
+#### Native Modules (iOS)
+```
+ios/Average/Sensors/StepDetectorModule.swift
+ios/Average/Sensors/StepDetectorModule.m
+ios/Average/Average-Bridging-Header.h
+```
+
+#### TypeScript Services
+```
+src/services/sensors/StepDetectorService.ts
+src/services/sensors/AccelerometerService.ts
+src/services/sensors/SensorFusionEngine.ts
+```
+
+#### UI Components
+```
+src/components/SensorStatusIndicator.tsx
+```
+
+#### Modified Files
+```
+android/app/src/main/java/com/average/MainApplication.kt
+android/app/src/main/AndroidManifest.xml
+ios/Average/Info.plist
+src/services/gps/SpeedEngine.ts
+src/services/gps/KalmanFilter.ts
+src/services/gps/GPSService.ts
+src/store/useSpeedStore.ts
+src/hooks/useSpeed.ts
+src/screens/DashboardScreen.tsx
+src/screens/HUDScreen.tsx
+jest.setup.ts
+jest.config.ts
+package.json
+```
+
+---
+
+### Expected Performance After Implementation
+
+| Scenario | Before (GPS only) | After (Full Sensor Fusion) |
+|----------|-------------------|---------------------------|
+| Start walking from still | 4-6 seconds of 0 km/h | Speed appears in < 0.5s |
+| Steady walking (5 km/h) | Jumps 0-7 km/h | Smooth 4.5-5.5 km/h |
+| Start running | 3-4 second lag | < 0.5s response |
+| Walk → get in car | N/A (same GPS) | Smooth transition, GPS takes over at ~15 km/h |
+| Driving 100 km/h | Works (GPS only) | Works (GPS authoritative, smoother via Kalman) |
+| Stopped at red light | Shows 2 km/h (GPS jitter) | Shows 0 km/h (dead zone + stationary detection) |
+| GPS tunnel while driving | Speed drops to 0 | Dead reckoning maintains estimate for 60s |
+| Driving on bumpy road | N/A | Correctly stays in vehicle mode (not walking) |
+| Car → park → walk | N/A | Smooth vehicle→stationary→walking transition |
+| Indoors / no GPS | Shows 0, broken | Pedometer + accel give accurate walking speed |
+| Phone in pocket | Same GPS | Step detector works regardless of orientation |

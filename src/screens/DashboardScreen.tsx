@@ -5,7 +5,7 @@ import SpeedDisplay from '../components/SpeedDisplay';
 import SpeedGauge from '../components/SpeedGauge';
 import LiquidGlassCard from '../components/LiquidGlassCard';
 import LiquidGlassButton from '../components/LiquidGlassButton';
-import GPSQualityIndicator from '../components/GPSQualityIndicator';
+import SensorStatusIndicator from '../components/SensorStatusIndicator';
 import { COLORS, SPACING } from '../theme/glassMorphism';
 
 function formatDuration(seconds: number): string {
@@ -28,6 +28,11 @@ const DashboardScreen: React.FC<{ navigation?: any }> = ({ navigation }) => {
     isPaused,
     unitLabel,
     distanceLabel,
+    confidence,
+    motionState,
+    primarySource,
+    gpsAccuracy,
+    sensorHealth,
     startTrip,
     stopTrip,
     pauseTrip,
@@ -42,7 +47,13 @@ const DashboardScreen: React.FC<{ navigation?: any }> = ({ navigation }) => {
         showsVerticalScrollIndicator={false}>
         {/* Top bar: GPS quality + HUD button */}
         <View style={styles.topBar}>
-          <GPSQualityIndicator accuracy={null} quality="none" />
+          <SensorStatusIndicator
+            gpsAccuracy={gpsAccuracy}
+            confidence={confidence}
+            motionState={motionState}
+            primarySource={primarySource}
+            sensorHealth={sensorHealth}
+          />
           {isTracking && (
             <Pressable
               onPress={() => navigation?.navigate('HUD')}
@@ -55,6 +66,20 @@ const DashboardScreen: React.FC<{ navigation?: any }> = ({ navigation }) => {
 
         {/* Trip timer */}
         <Text style={styles.timer}>{formatDuration(duration)}</Text>
+
+        {/* Motion state label */}
+        {isTracking && motionState === 'walking' && (
+          <Text style={styles.motionLabel}>🚶 Walking</Text>
+        )}
+        {isTracking && motionState === 'running' && (
+          <Text style={styles.motionLabel}>🏃 Running</Text>
+        )}
+        {isTracking && motionState === 'vehicle' && (
+          <Text style={styles.motionLabel}>🚗 Driving</Text>
+        )}
+        {isTracking && motionState === 'gps_dead_reckoning' && (
+          <Text style={[styles.motionLabel, styles.motionLabelEstimated]}>📡 Estimated</Text>
+        )}
 
         {/* Speed gauge + display */}
         <View style={styles.gaugeContainer}>
@@ -172,6 +197,14 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
     color: COLORS.primary,
+  },
+  motionLabel: {
+    fontSize: 12,
+    color: COLORS.textSecondary,
+    marginBottom: SPACING.sm,
+  },
+  motionLabelEstimated: {
+    color: COLORS.speedModerate,
   },
   timer: {
     fontSize: 20,

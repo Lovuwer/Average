@@ -83,6 +83,15 @@ jest.mock('react-native-sqlite-storage', () => ({
   })),
 }));
 
+// Mock react-native-sensors
+jest.mock('react-native-sensors', () => ({
+  accelerometer: { subscribe: jest.fn(() => ({ unsubscribe: jest.fn() })) },
+  gyroscope: { subscribe: jest.fn(() => ({ unsubscribe: jest.fn() })) },
+  barometer: { subscribe: jest.fn(() => ({ unsubscribe: jest.fn() })) },
+  setUpdateIntervalForType: jest.fn(),
+  SensorTypes: { accelerometer: 'accelerometer', gyroscope: 'gyroscope', barometer: 'barometer' },
+}));
+
 // Mock NativeModules for CarPlay/Android Auto bridges
 jest.mock('react-native', () => {
   const rn = jest.requireActual('react-native');
@@ -91,6 +100,11 @@ jest.mock('react-native', () => {
   };
   rn.NativeModules.CarPlayBridge = {
     updateSpeedData: jest.fn(),
+  };
+  rn.NativeModules.StepDetectorModule = {
+    start: jest.fn(),
+    stop: jest.fn(),
+    isAvailable: jest.fn(() => Promise.resolve(true)),
   };
   return rn;
 });

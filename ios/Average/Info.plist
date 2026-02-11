@@ -55,5 +55,7 @@
 			</array>
 		</dict>
 	</dict>
+	<key>NSMotionUsageDescription</key>
+	<string>Average uses motion sensors to provide instant and accurate speed readings while walking, running, or driving.</string>
 </dict>
 </plist>
