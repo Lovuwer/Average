@@ -3,7 +3,7 @@ import { TokenManager } from '../auth/TokenManager';
 
 const BASE_URL = __DEV__
   ? 'http://localhost:3000'
-  : 'https://average-api.railway.app';
+  : 'https://average-production.up.railway.app';
 
 class ApiClient {
   private client: AxiosInstance;
