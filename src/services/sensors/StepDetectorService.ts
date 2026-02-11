@@ -19,6 +19,7 @@ class StepDetectorService {
   private iosDistance: number | null = null;
   private readonly MAX_BUFFER_SIZE = 10;
   private readonly STEP_TIMEOUT = 2000; // ms - if no step for 2s, user stopped
+  private readonly MIN_VALID_EPOCH_MS = 1577836800000; // Jan 1, 2020 in epoch ms
 
   constructor() {
     if (StepDetectorModule) {
@@ -53,7 +54,7 @@ class StepDetectorService {
         // Ensure timestamp is in epoch-ms domain (compatible with Date.now())
         // If timestamp looks like boot-relative (< year 2020 in ms), use Date.now() instead
         const rawTs = data.timestamp;
-        const timestamp = (rawTs && rawTs > 1577836800000) ? rawTs : Date.now();
+        const timestamp = (rawTs && rawTs > this.MIN_VALID_EPOCH_MS) ? rawTs : Date.now();
 
         // Update circular buffer
         this.stepTimestamps.push(timestamp);

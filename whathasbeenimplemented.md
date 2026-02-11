@@ -1175,3 +1175,61 @@ package.json
 | Car → park → walk | N/A | Smooth vehicle→stationary→walking transition |
 | Indoors / no GPS | Shows 0, broken | Pedometer + accel give accurate walking speed |
 | Phone in pocket | Same GPS | Step detector works regardless of orientation |
+
+---
+
+## TASK — Fix Stuck at 0 km/h (GPS-First Architecture)
+
+### Status: COMPLETE
+
+---
+
+### Bug 1: StepDetectorModule Android — Wrong Timestamp Domain
+
+**What was fixed:**
+- `android/app/src/main/java/com/average/sensors/StepDetectorModule.kt`: Changed both `onStepDetected` and `onStepCount` events from `event.timestamp / 1_000_000.0` (boot-relative ms) to `System.currentTimeMillis().toDouble()` (epoch ms)
+- Root cause: `event.timestamp` is `SystemClock.elapsedRealtimeNanos`, which when divided by 1,000,000 gives milliseconds since boot. The JS side (`SensorFusionEngine.ts`) compares against `Date.now()` (Unix epoch ms). The mismatched time domains caused `timeSinceLastStep` to be billions of milliseconds, so the engine always thought no step was ever detected.
+
+### Bug 2: AccelerometerService — Silent Failure With No Recovery
+
+**What was fixed:**
+- `src/services/sensors/AccelerometerService.ts`: Wrapped each sensor subscription (accelerometer, gyroscope, barometer) in its own try/catch block with `console.warn` logging
+- Added individual `setUpdateIntervalForType` try/catch blocks
+- Added `console.warn` in each sensor error callback and outer catch block
+- Explicitly set `accelActive`, `gyroActive`, `baroActive` to `false` in the outer catch block
+- Root cause: A single try/catch around all sensors meant one failing sensor killed them all silently. No logging made debugging impossible.
+
+### Bug 3: SensorFusionEngine — No GPS-Only Fallback Path (THE BIG ONE)
+
+**What was fixed:**
+- `src/services/sensors/SensorFusionEngine.ts`: Rewrote `determineMotionState()` with GPS-first tiered logic:
+  - **Tier 1 (GPS-based):** GPS speed > 6 m/s → vehicle, > 3 m/s with accuracy < 20 → running, > 0.8 m/s with accuracy < 20 → walking. Works without any sensors.
+  - **Tier 2 (Sensor-enhanced):** Only when GPS speed is ambiguous (0–0.8 m/s), uses accelerometer and step detector to disambiguate.
+  - **Tier 3 (Marginal GPS):** 0.3–0.8 m/s with good accuracy — hysteresis to prevent jitter.
+  - **Tier 4 (Vehicle transitions):** Engine idle detection at red lights with 5s timeout.
+  - **Tier 5 (Default):** Stationary if no movement detected anywhere.
+- Rewrote `calculateWalkingSpeed()` with GPS-only fast path when sensors are dead
+- Rewrote `calculateRunningSpeed()` with same GPS-only fallback pattern
+- Root cause: The old `determineMotionState()` required working accelerometer + step detector for walking/running classification. With Bugs 1+2, sensors were always dead, leaving the engine stuck in 'stationary' even with valid GPS speed.
+
+### Bug 4: StepDetectorService — Timestamp Domain Validation
+
+**What was fixed:**
+- `src/services/sensors/StepDetectorService.ts`: Added epoch timestamp validation — if `data.timestamp` is below `1577836800000` (Jan 1, 2020 in epoch ms), fall back to `Date.now()`
+- This makes the JS side resilient regardless of what the native module sends (boot-relative or epoch)
+
+### Files Modified
+
+| File | Change |
+|------|--------|
+| `android/.../StepDetectorModule.kt` | `event.timestamp / 1_000_000.0` → `System.currentTimeMillis().toDouble()` (2 locations) |
+| `src/services/sensors/AccelerometerService.ts` | Individual try/catch per sensor + `console.warn` logging |
+| `src/services/sensors/SensorFusionEngine.ts` | Rewrote `determineMotionState()`, `calculateWalkingSpeed()`, `calculateRunningSpeed()` |
+| `src/services/sensors/StepDetectorService.ts` | Epoch timestamp validation safety net |
+| `__tests__/unit/services/sensors/SensorFusionEngine.test.ts` | Added 5 GPS-first classification tests |
+
+### Test Results
+
+- 47 unit tests passing (42 existing + 5 new GPS-first tests)
+- 25 integration tests passing
+- All existing behavior preserved
