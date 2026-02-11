@@ -430,3 +430,98 @@ describe('Edge cases', () => {
     expect(data.currentSpeed).toBeGreaterThan(0);
   });
 });
+
+// ════════════════════════════════════════════════════════════════
+// GPS-FIRST LOGIC (Bug 3 fix validation)
+// ════════════════════════════════════════════════════════════════
+
+describe('GPS-first motion classification', () => {
+  it('walking GPS speed (1.2 m/s) classifies as walking even with dead sensors', () => {
+    mockGetCurrentState.mockReturnValue('stationary');
+    mockGetStepFrequency.mockReturnValue(0);
+    mockGetEstimatedSpeed.mockReturnValue(0);
+
+    sensorFusionEngine.start(fusionCallback);
+    const gpsCallback = captureGpsCallback();
+
+    jest.advanceTimersByTime(500);
+
+    // GPS reports walking speed with good accuracy
+    gpsCallback(makeGpsPosition(1.2, 8));
+
+    const data = sensorFusionEngine.getData();
+    expect(data.motionState).toBe('walking');
+    expect(data.currentSpeed).toBeGreaterThan(0);
+  });
+
+  it('running GPS speed (4.0 m/s) classifies as running even with dead sensors', () => {
+    mockGetCurrentState.mockReturnValue('stationary');
+    mockGetStepFrequency.mockReturnValue(0);
+    mockGetEstimatedSpeed.mockReturnValue(0);
+
+    sensorFusionEngine.start(fusionCallback);
+    const gpsCallback = captureGpsCallback();
+
+    jest.advanceTimersByTime(500);
+
+    // GPS reports running speed
+    gpsCallback(makeGpsPosition(4.0, 8));
+
+    const data = sensorFusionEngine.getData();
+    expect(data.motionState).toBe('running');
+    expect(data.currentSpeed).toBeGreaterThan(0);
+  });
+
+  it('vehicle GPS speed (15 m/s) classifies as vehicle without step timeout requirement', () => {
+    mockGetCurrentState.mockReturnValue('stationary');
+    mockGetStepFrequency.mockReturnValue(0);
+    mockGetEstimatedSpeed.mockReturnValue(0);
+
+    sensorFusionEngine.start(fusionCallback);
+    const gpsCallback = captureGpsCallback();
+
+    // No need to wait 5+ seconds for step timeout
+    jest.advanceTimersByTime(500);
+
+    gpsCallback(makeGpsPosition(15, 5));
+
+    const data = sensorFusionEngine.getData();
+    expect(data.motionState).toBe('vehicle');
+  });
+
+  it('stationary when GPS jitter is below 0.3 m/s', () => {
+    mockGetCurrentState.mockReturnValue('stationary');
+    mockGetStepFrequency.mockReturnValue(0);
+
+    sensorFusionEngine.start(fusionCallback);
+    const gpsCallback = captureGpsCallback();
+
+    jest.advanceTimersByTime(500);
+
+    gpsCallback(makeGpsPosition(0.2, 5));
+
+    const data = sensorFusionEngine.getData();
+    expect(data.motionState).toBe('stationary');
+    expect(data.currentSpeed).toBe(0);
+  });
+
+  it('walking speed uses GPS directly when pedometer is dead', () => {
+    mockGetCurrentState.mockReturnValue('stationary');
+    mockGetStepFrequency.mockReturnValue(0);
+    mockGetEstimatedSpeed.mockReturnValue(0);
+
+    sensorFusionEngine.start(fusionCallback);
+    const gpsCallback = captureGpsCallback();
+
+    jest.advanceTimersByTime(500);
+
+    // GPS reports clear walking speed
+    gpsCallback(makeGpsPosition(1.4, 8));
+
+    const data = sensorFusionEngine.getData();
+    expect(data.motionState).toBe('walking');
+    expect(data.primarySource).toBe('gps');
+    // Speed should reflect GPS value (Kalman-filtered)
+    expect(data.currentSpeed).toBeGreaterThan(0.5);
+  });
+});

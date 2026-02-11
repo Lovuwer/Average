@@ -379,59 +379,147 @@ class SensorFusionEngine {
     const now = Date.now();
     const gpsSpeed = gpsPos?.speed ?? -1;
     const gpsSpeedMs = gpsSpeed >= 0 ? gpsSpeed : 0;
+    const gpsAvailable = gpsSpeed >= 0;
+    const gpsAccuracy = gpsPos?.accuracy ?? 999;
     const accelState = accelerometerService.getCurrentState();
+    const accelActive = accelerometerService.isAccelerometerActive();
     const stepFreq = stepDetectorService.getStepFrequency();
     const timeSinceLastStep = now - this.lastStepTime;
+    const stepsRecent = this.lastStepTime > 0 && timeSinceLastStep < 2000;
     const accelVariance = accelerometerService.getAccelVariance();
 
-    // Vehicle mode: GPS speed > 6 m/s (21.6 km/h) AND (no steps for 5s or accel says vehicle)
-    if (gpsSpeedMs > 6 && (timeSinceLastStep > 5000 || accelState === 'vehicle')) {
+    // ═══════════════════════════════════════════════════════
+    // TIER 1: GPS-BASED CLASSIFICATION (works without any sensors)
+    // GPS is ALWAYS the ground truth for speed magnitude.
+    // ═══════════════════════════════════════════════════════
+
+    // Vehicle mode: GPS speed > 6 m/s (21.6 km/h) — no human runs this fast sustained
+    if (gpsAvailable && gpsSpeedMs > 6) {
       return 'vehicle';
     }
 
-    // Stay in vehicle if speed < 2 m/s but accel shows vibration (engine idle)
-    if (this.motionState === 'vehicle' && gpsSpeedMs < 2 && accelVariance >= 0.08) {
-      // Check if we should transition to stationary
-      const timeLowSpeed = now - this.motionStateChangeTime;
-      if (timeLowSpeed < 3000) {
-        return 'vehicle'; // stay in vehicle briefly
+    // Clear GPS movement: speed > 0.8 m/s (2.9 km/h) with reasonable accuracy
+    // This is DEFINITELY not stationary — person is walking, running, or slow vehicle
+    if (gpsAvailable && gpsSpeedMs > 0.8 && gpsAccuracy < 20) {
+      // Sub-classify: running vs walking using GPS speed
+      if (gpsSpeedMs > 3.0) {
+        // > 10.8 km/h — running speed or slow cycling
+        // If sensors confirm running, great. If not, still call it running from GPS alone.
+        return 'running';
+      }
+      // 0.8 – 3.0 m/s (2.9 – 10.8 km/h) = walking or jogging
+      return 'walking';
+    }
+
+    // ═══════════════════════════════════════════════════════
+    // TIER 2: SENSOR-ENHANCED CLASSIFICATION (refines GPS)
+    // Only used when GPS speed is ambiguous (0 – 0.8 m/s)
+    // ═══════════════════════════════════════════════════════
+
+    // If sensors are active and reporting, use them to disambiguate
+    if (accelActive) {
+      // Sensors say running + some GPS movement
+      if ((accelState === 'running' || stepFreq > 2.5) && stepsRecent && gpsSpeedMs < 6) {
+        return 'running';
+      }
+
+      // Sensors say walking
+      if (stepsRecent && stepFreq > 0 && gpsSpeedMs < 3) {
+        return 'walking';
+      }
+
+      // Accelerometer says walking (even without step detector)
+      if (accelState === 'walking' && gpsSpeedMs < 3) {
+        return 'walking';
+      }
+
+      // Accelerometer says vehicle (low-freq vibration, no steps)
+      if (accelState === 'vehicle' && !stepsRecent) {
+        return 'vehicle';
       }
     }
 
-    // Vehicle → Stationary: speed < 2 m/s for 3+ seconds
+    // ═══════════════════════════════════════════════════════
+    // TIER 3: GPS MARGINAL SPEED (0.3 – 0.8 m/s)
+    // GPS jitter zone — could be stationary or slow walk
+    // ═══════════════════════════════════════════════════════
+
+    if (gpsAvailable && gpsSpeedMs > 0.3 && gpsAccuracy < 15) {
+      // Marginal speed with good accuracy — probably slow walking
+      // If we were already walking/running, stay in that state (hysteresis)
+      if (this.motionState === 'walking' || this.motionState === 'running') {
+        return 'walking';
+      }
+      // If we were stationary, give GPS the benefit of the doubt if speed sustained
+      // But don't immediately jump to walking from one reading
+      return 'stationary';
+    }
+
+    // ═══════════════════════════════════════════════════════
+    // TIER 4: VEHICLE STATE TRANSITIONS
+    // ═══════════════════════════════════════════════════════
+
+    // Stay in vehicle mode at low speed if accelerometer shows vibration (engine idle at red light)
     if (this.motionState === 'vehicle' && gpsSpeedMs < 2) {
+      if (accelActive && accelVariance >= 0.08) {
+        // Engine vibration detected — likely stopped at red light, stay in vehicle briefly
+        const timeLowSpeed = now - this.motionStateChangeTime;
+        if (timeLowSpeed < 5000) {
+          return 'vehicle';
+        }
+      }
+      // Been stopped for a while → stationary
       return 'stationary';
     }
 
-    // Running: accel says running AND steps detected AND GPS speed < 6 m/s
-    if ((accelState === 'running' || stepFreq > 2.5) && timeSinceLastStep < 2000 && gpsSpeedMs < 6) {
-      return 'running';
-    }
+    // ═══════════════════════════════════════════════════════
+    // TIER 5: DEFAULT — STATIONARY
+    // ═══════════════════════════════════════════════════════
 
-    // Walking: steps detected AND low speed
-    if (timeSinceLastStep < 2000 && stepFreq > 0 && gpsSpeedMs < 3) {
-      return 'walking';
-    }
-
-    // Walking based on accelerometer
-    if (accelState === 'walking' && gpsSpeedMs < 3) {
-      return 'walking';
-    }
-
-    // Stationary: no movement detected
-    if (accelState === 'stationary' && timeSinceLastStep > 2000 && gpsSpeedMs < 0.3) {
+    // GPS speed < 0.3, no sensor movement, no steps → stationary
+    if (gpsSpeedMs < 0.3 && (!accelActive || accelState === 'stationary') && !stepsRecent) {
       return 'stationary';
     }
 
-    // Default: keep current state
+    // Preserve current state if nothing definitively changed
     return this.motionState === 'gps_dead_reckoning' ? 'stationary' : this.motionState;
   }
 
   private calculateWalkingSpeed(timeSinceStateChange: number, gpsSpeed: number, gpsAccuracy: number): number {
     const stepSpeed = stepDetectorService.getEstimatedSpeed();
+    const sensorsWorking = stepSpeed > 0;
+
+    // ═══════════════════════════════════════════════════════
+    // FAST PATH: If GPS has a valid speed, use it immediately
+    // This is the key fix — GPS speed is available from the FIRST callback
+    // No need to wait for pedometer to warm up
+    // ═══════════════════════════════════════════════════════
+
+    if (!sensorsWorking) {
+      // Sensors are dead — pure GPS mode
+      if (gpsSpeed >= 0 && gpsAccuracy < 20) {
+        this.confidence = gpsAccuracy < 10 ? 'high' : 'medium';
+        this.primarySource = 'gps';
+        return gpsSpeed;
+      }
+      // No GPS either — use initial estimate briefly, then 0
+      this.confidence = 'low';
+      this.primarySource = 'accelerometer';
+      return timeSinceStateChange < 2000 ? 1.2 : 0;
+    }
+
+    // ═══════════════════════════════════════════════════════
+    // SENSOR-ENHANCED PATH: Blend pedometer + GPS
+    // ═══════════════════════════════════════════════════════
 
     // Phase 1: 0–300ms, before steps are counted
     if (timeSinceStateChange < 300) {
+      // If GPS already has a speed, use it instead of hardcoded 1.2
+      if (gpsSpeed >= 0 && gpsAccuracy < 15) {
+        this.confidence = 'medium';
+        this.primarySource = 'gps';
+        return gpsSpeed;
+      }
       this.confidence = 'low';
       this.primarySource = 'accelerometer';
       return 1.2; // 4.3 km/h initial estimate
@@ -449,6 +537,12 @@ class SensorFusionEngine {
         this.confidence = 'medium';
         this.primarySource = 'pedometer';
         return stepSpeed;
+      }
+      // Steps not ready yet but GPS is — use GPS
+      if (gpsSpeed >= 0 && gpsAccuracy < 15) {
+        this.confidence = 'medium';
+        this.primarySource = 'gps';
+        return gpsSpeed;
       }
       this.confidence = 'low';
       this.primarySource = 'accelerometer';
@@ -482,9 +576,27 @@ class SensorFusionEngine {
 
   private calculateRunningSpeed(timeSinceStateChange: number, gpsSpeed: number, gpsAccuracy: number): number {
     const stepSpeed = stepDetectorService.getEstimatedSpeed();
+    const sensorsWorking = stepSpeed > 0;
+
+    // Pure GPS mode when sensors are dead
+    if (!sensorsWorking) {
+      if (gpsSpeed >= 0 && gpsAccuracy < 20) {
+        this.confidence = gpsAccuracy < 10 ? 'high' : 'medium';
+        this.primarySource = 'gps';
+        return gpsSpeed;
+      }
+      this.confidence = 'low';
+      this.primarySource = 'accelerometer';
+      return timeSinceStateChange < 2000 ? 2.8 : 0;
+    }
 
     // Phase 1
     if (timeSinceStateChange < 300) {
+      if (gpsSpeed >= 0 && gpsAccuracy < 15) {
+        this.confidence = 'medium';
+        this.primarySource = 'gps';
+        return gpsSpeed;
+      }
       this.confidence = 'low';
       this.primarySource = 'accelerometer';
       return 2.8; // 10 km/h initial estimate
@@ -502,6 +614,11 @@ class SensorFusionEngine {
         this.confidence = 'medium';
         this.primarySource = 'pedometer';
         return stepSpeed;
+      }
+      if (gpsSpeed >= 0 && gpsAccuracy < 15) {
+        this.confidence = 'medium';
+        this.primarySource = 'gps';
+        return gpsSpeed;
       }
       this.confidence = 'low';
       this.primarySource = 'accelerometer';

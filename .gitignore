@@ -78,3 +78,4 @@ backend/dist/
 
 # Temporary files
 /tmp/
+node_modules/

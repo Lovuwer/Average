@@ -50,7 +50,10 @@ class StepDetectorService {
     this.stepSubscription = this.eventEmitter.addListener(
       'onStepDetected',
       (data: any) => {
-        const timestamp = data.timestamp || Date.now();
+        // Ensure timestamp is in epoch-ms domain (compatible with Date.now())
+        // If timestamp looks like boot-relative (< year 2020 in ms), use Date.now() instead
+        const rawTs = data.timestamp;
+        const timestamp = (rawTs && rawTs > 1577836800000) ? rawTs : Date.now();
 
         // Update circular buffer
         this.stepTimestamps.push(timestamp);

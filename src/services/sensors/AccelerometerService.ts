@@ -60,44 +60,65 @@ class AccelerometerService {
       const { accelerometer, gyroscope, barometer, setUpdateIntervalForType } = sensors;
 
       // Set update intervals
-      setUpdateIntervalForType('accelerometer', 20); // 50Hz
-      setUpdateIntervalForType('gyroscope', 50); // 20Hz
-      setUpdateIntervalForType('barometer', 1000); // 1Hz
+      try { setUpdateIntervalForType('accelerometer', 20); } catch (e) { console.warn('[AccelerometerService] Failed to set accelerometer interval:', e); }
+      try { setUpdateIntervalForType('gyroscope', 50); } catch (e) { console.warn('[AccelerometerService] Failed to set gyroscope interval:', e); }
+      try { setUpdateIntervalForType('barometer', 1000); } catch (e) { console.warn('[AccelerometerService] Failed to set barometer interval:', e); }
 
       // Accelerometer subscription
-      this.accelSubscription = accelerometer.subscribe({
-        next: (data: { x: number; y: number; z: number; timestamp: number }) => {
-          this.processAccelerometer(data);
-        },
-        error: () => {
-          this.accelActive = false;
-        },
-      });
-      this.accelActive = true;
+      try {
+        this.accelSubscription = accelerometer.subscribe({
+          next: (data: { x: number; y: number; z: number; timestamp: number }) => {
+            this.processAccelerometer(data);
+          },
+          error: (err: any) => {
+            console.warn('[AccelerometerService] Accelerometer stream error:', err);
+            this.accelActive = false;
+          },
+        });
+        this.accelActive = true;
+      } catch (e) {
+        console.warn('[AccelerometerService] Failed to subscribe to accelerometer:', e);
+        this.accelActive = false;
+      }
 
       // Gyroscope subscription
-      this.gyroSubscription = gyroscope.subscribe({
-        next: (data: { x: number; y: number; z: number; timestamp: number }) => {
-          this.processGyroscope(data);
-        },
-        error: () => {
-          this.gyroActive = false;
-        },
-      });
-      this.gyroActive = true;
+      try {
+        this.gyroSubscription = gyroscope.subscribe({
+          next: (data: { x: number; y: number; z: number; timestamp: number }) => {
+            this.processGyroscope(data);
+          },
+          error: (err: any) => {
+            console.warn('[AccelerometerService] Gyroscope stream error:', err);
+            this.gyroActive = false;
+          },
+        });
+        this.gyroActive = true;
+      } catch (e) {
+        console.warn('[AccelerometerService] Failed to subscribe to gyroscope:', e);
+        this.gyroActive = false;
+      }
 
       // Barometer subscription
-      this.baroSubscription = barometer.subscribe({
-        next: (data: { pressure: number }) => {
-          this.processBarometer(data);
-        },
-        error: () => {
-          this.baroActive = false;
-        },
-      });
-      this.baroActive = true;
-    } catch {
-      // Graceful degradation - sensors not available
+      try {
+        this.baroSubscription = barometer.subscribe({
+          next: (data: { pressure: number }) => {
+            this.processBarometer(data);
+          },
+          error: (err: any) => {
+            console.warn('[AccelerometerService] Barometer stream error:', err);
+            this.baroActive = false;
+          },
+        });
+        this.baroActive = true;
+      } catch (e) {
+        console.warn('[AccelerometerService] Failed to subscribe to barometer:', e);
+        this.baroActive = false;
+      }
+    } catch (e) {
+      console.warn('[AccelerometerService] react-native-sensors not available:', e);
+      this.accelActive = false;
+      this.gyroActive = false;
+      this.baroActive = false;
     }
   }
 
