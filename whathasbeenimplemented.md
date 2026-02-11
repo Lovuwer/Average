@@ -862,35 +862,113 @@ src/screens/DashboardScreen.tsx — GPS quality + HUD button
 
 ## TASK 6 — GPS Speed Accuracy Fix + cnrad.dev-Inspired Background + Liquid Glass Icons
 
-### Status: IN PROGRESS
+### Status: COMPLETE
 
-### Changes About to Be Made:
+---
 
-#### Part A: GPS Speed Accuracy Fixes
-1. **KalmanFilter.ts** — Adjust default noise parameters
-   - Increase processNoise: 0.008 → 0.1
-   - Decrease measurementNoise: 0.5 → 0.3
+### Part A: GPS Speed Accuracy Fixes
 
-2. **SpeedEngine.ts** — Add stationary detection and GPS accuracy gating
-   - Add GPS accuracy gating (skip readings with accuracy > 20m)
-   - Add SPEED_DEAD_ZONE = 0.5 m/s to eliminate GPS jitter
-   - Add stationary detection counter (3 consecutive low readings = force to 0)
-   - Add speed confidence check (cross-check GPS speed vs Haversine)
-   - Update reset() to include stationaryCount
+**What was implemented:**
 
-3. **GPSService.ts** — Ensure optimal GPS config
-   - Verify distanceFilter is set to 0 (or very low)
-   - Ensure accuracy field is passed through
+1. **Modified `src/services/gps/KalmanFilter.ts`**:
+   - Increased `processNoise` default from `0.008` to `0.1` — allows the filter to adapt faster to actual speed changes
+   - Decreased `measurementNoise` default from `0.5` to `0.3` — trusts GPS measurements more, reduces lag
+   - These changes fix the issue where the filter was not responding quickly enough to actual speed changes
 
-#### Part B: cnrad.dev-Inspired Animated Background
-1. **AnimatedBackground.tsx** — Create new component
-   - Fixed full-screen overlay with animated sun rays
-   - Uses react-native-linear-gradient for gradient
-   - Uses react-native-reanimated for sway animation
-   - 3 animated bars rotating 28deg ↔ 31deg
-   - Opacity 0.15, fades in over 2 seconds
+2. **Modified `src/services/gps/SpeedEngine.ts`**:
+   - Added GPS accuracy gating at the top of `processPosition()`:
+     - Skips readings with `accuracy > 20` meters (unreliable GPS data)
+   - Added `SPEED_DEAD_ZONE = 0.5 m/s` (~1.8 km/h):
+     - Forces filtered speed to 0 if below threshold
+     - Eliminates GPS jitter that causes "2 km/h while sitting"
+   - Added stationary detection:
+     - Tracks `stationaryCount` for consecutive low-speed readings
+     - If raw GPS speed < 0.3 m/s for 3+ consecutive readings, forces output to 0 AND resets Kalman filter to 0
+     - Prevents Kalman filter from slowly drifting back up from 0
+   - Added speed confidence check:
+     - Cross-checks GPS-reported speed with Haversine-calculated speed
+     - If they differ by more than 50%, prefers the LOWER value
+     - Prevents GPS speed spikes that cause "increases then decreases" effect
+   - Updated `reset()` method to reset `stationaryCount = 0`
 
-2. **glassMorphism.ts** — Add new color constants
-   - rayColor, rayGradientStart, rayGradientEnd, backgroundOverlayOpacity
+3. **Modified `src/services/gps/GPSService.ts`**:
+   - Changed `distanceFilter` from `1` to `0` for maximum GPS update frequency
+   - Ensures `accuracy` field is passed through to SpeedEngine
 
-3. **App.tsx** — Integrate AnimatedBackground component
+---
+
+### Part B: cnrad.dev-Inspired Animated Background
+
+**What was implemented:**
+
+1. **Created `src/components/AnimatedBackground.tsx`**:
+   - React Native adaptation of cnrad.dev's sun-ray background effect
+   - Fixed full-screen overlay (position: absolute, zIndex: -3)
+   - Uses `react-native-linear-gradient` for horizontal gradient:
+     - Gradient from `rgba(255,255,255,0.04)` on left → `#0A0A0A` on right
+     - Creates subtle light wash from left side (inverted for dark theme)
+   - 3 animated "ray" bars:
+     - Each bar has width: screenWidth * 2 (extends off-screen)
+     - Heights: 40, 60, 80 pixels for varying sizes
+     - Background color: `rgba(255,255,255,0.03)` (very subtle white)
+     - Positioned at different vertical offsets: 20%, 40%, 60%
+   - Uses `react-native-reanimated` for smooth sway animation:
+     - Each bar rotates between 28deg ↔ 31deg
+     - Different animation durations: 6s, 7s, 8s for organic feel
+   - Opacity of entire component: 0.15
+   - Animated entrance: fades in from 0 → 0.15 over 2 seconds using `withTiming`
+   - The effect creates subtle, animated light rays that give depth to the dark background
+
+2. **Modified `src/theme/glassMorphism.ts`**:
+   - Added new color constants:
+     - `rayColor: 'rgba(255,255,255,0.03)'` — color for the ray bars
+     - `rayGradientStart: 'rgba(255,255,255,0.04)'` — gradient start (left)
+     - `rayGradientEnd: '#0A0A0A'` — gradient end (right)
+     - `backgroundOverlayOpacity: 0.15` — overall opacity of the effect
+
+3. **Modified `App.tsx`**:
+   - Wrapped `NavigationContainer` in a View with AnimatedBackground
+   - AnimatedBackground renders behind all content (zIndex: -3)
+   - Added background color style to container for consistency
+
+---
+
+### Files Modified
+
+**Modified:**
+- `src/services/gps/KalmanFilter.ts` — Updated default noise parameters
+- `src/services/gps/SpeedEngine.ts` — Added stationary detection, accuracy gating, confidence checks
+- `src/services/gps/GPSService.ts` — Optimized GPS config (distanceFilter: 0)
+- `src/theme/glassMorphism.ts` — Added animated background color constants
+- `App.tsx` — Integrated AnimatedBackground component
+
+**Created:**
+- `src/components/AnimatedBackground.tsx` — New animated sun-ray background component
+
+---
+
+### Build Verification (Task 6)
+
+| Check | Result |
+|-------|--------|
+| `npm install` | ✅ No errors, 990 packages installed |
+| `npm run typecheck` | ✅ TypeScript compiles cleanly, no errors |
+
+---
+
+### Impact
+
+1. **GPS Speed Accuracy** — Fixed stationary detection showing 2 km/h while sitting:
+   - Kalman filter now adapts faster to speed changes
+   - Dead zone eliminates GPS jitter below 1.8 km/h
+   - Stationary detection forces speed to 0 after 3 consecutive low readings
+   - Accuracy gating rejects poor GPS signals
+   - Confidence check prevents speed spikes
+
+2. **Visual Polish** — Added elegant ambient background effect:
+   - Subtle animated light rays create depth
+   - Makes glass morphism effects more visible
+   - cnrad.dev-inspired design for modern aesthetic
+   - Smooth animations with organic feel (varying durations)
+
+---
