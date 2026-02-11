@@ -92,4 +92,56 @@ describe('KalmanFilter', () => {
     const elapsed = performance.now() - start;
     expect(elapsed).toBeLessThan(100);
   });
+
+  it('setProcessNoise() updates processNoise', () => {
+    filter.setProcessNoise(0.5);
+    const result1 = filter.filter(50);
+    filter.reset();
+
+    filter.setProcessNoise(0.001);
+    const result2 = filter.filter(50);
+
+    // Higher processNoise → faster convergence (closer to measurement)
+    expect(result1).toBeGreaterThan(result2);
+  });
+
+  it('setMeasurementNoise() updates measurementNoise', () => {
+    filter.setMeasurementNoise(0.1);
+    const result1 = filter.filter(50);
+    filter.reset();
+
+    filter.setMeasurementNoise(10.0);
+    const result2 = filter.filter(50);
+
+    // Lower measurementNoise → trusts measurement more → closer to 50
+    expect(result1).toBeGreaterThan(result2);
+  });
+
+  it('higher processNoise leads to faster convergence to new measurements', () => {
+    const fastFilter = new KalmanFilter(1.0, 0.3);
+    const slowFilter = new KalmanFilter(0.01, 0.3);
+
+    // Feed same data to both
+    for (let i = 0; i < 5; i++) {
+      fastFilter.filter(100);
+      slowFilter.filter(100);
+    }
+
+    // Fast filter should be closer to 100 after 5 readings
+    expect(fastFilter.getEstimate()).toBeGreaterThan(slowFilter.getEstimate());
+  });
+
+  it('lower processNoise leads to smoother, slower convergence', () => {
+    const smoothFilter = new KalmanFilter(0.001, 0.3);
+
+    smoothFilter.filter(0);
+    smoothFilter.filter(0);
+    smoothFilter.filter(0);
+
+    // Now feed a spike
+    smoothFilter.filter(100);
+
+    // With low processNoise, filter should not jump much
+    expect(smoothFilter.getEstimate()).toBeLessThan(50);
+  });
 });

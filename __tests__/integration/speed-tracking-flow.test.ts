@@ -9,6 +9,38 @@ jest.mock('../../src/services/gps/GPSService', () => ({
   },
 }));
 
+jest.mock('../../src/services/sensors/StepDetectorService', () => ({
+  stepDetectorService: {
+    startListening: jest.fn(),
+    stopListening: jest.fn(),
+    isAvailable: jest.fn(() => Promise.resolve(false)),
+    getStepFrequency: jest.fn(() => 0),
+    getEstimatedSpeed: jest.fn(() => 0),
+    getCadence: jest.fn(() => null),
+    getPace: jest.fn(() => null),
+    getIosDistance: jest.fn(() => null),
+  },
+}));
+
+jest.mock('../../src/services/sensors/AccelerometerService', () => ({
+  accelerometerService: {
+    startListening: jest.fn(),
+    stopListening: jest.fn(),
+    getCurrentState: jest.fn(() => 'stationary'),
+    getAccelMagnitude: jest.fn(() => 0),
+    getAccelVariance: jest.fn(() => 0),
+    getLinearAcceleration: jest.fn(() => ({ x: 0, y: 0, z: 0 })),
+    getYawRate: jest.fn(() => 0),
+    getHeadingDelta: jest.fn(() => 0),
+    resetHeadingDelta: jest.fn(),
+    getAltitudeChange: jest.fn(() => 0),
+    resetAltitude: jest.fn(),
+    isAccelerometerActive: jest.fn(() => false),
+    isGyroscopeActive: jest.fn(() => false),
+    isBarometerActive: jest.fn(() => false),
+  },
+}));
+
 import { speedEngine, msToKmh } from '../../src/services/gps/SpeedEngine';
 
 describe('Speed Tracking Flow Integration', () => {
@@ -42,6 +74,8 @@ describe('Speed Tracking Flow Integration', () => {
       altitude: 100,
       accuracy: 5,
       timestamp,
+      bearing: -1,
+      altitudeAccuracy: -1,
     };
   }
 
