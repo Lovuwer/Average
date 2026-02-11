@@ -56,14 +56,14 @@ class StepDetectorModule(reactContext: ReactApplicationContext) :
         when (event.sensor.type) {
             Sensor.TYPE_STEP_DETECTOR -> {
                 val params = Arguments.createMap().apply {
-                    putDouble("timestamp", event.timestamp / 1_000_000.0)
+                    putDouble("timestamp", System.currentTimeMillis().toDouble())
                 }
                 sendEvent("onStepDetected", params)
             }
             Sensor.TYPE_STEP_COUNTER -> {
                 val params = Arguments.createMap().apply {
                     putDouble("steps", event.values[0].toDouble())
-                    putDouble("timestamp", event.timestamp / 1_000_000.0)
+                    putDouble("timestamp", System.currentTimeMillis().toDouble())
                 }
                 sendEvent("onStepCount", params)
             }
