@@ -857,3 +857,40 @@ src/screens/DashboardScreen.tsx — GPS quality + HUD button
 | `npx react-native config` | ✅ Correct packageName, sourceDir |
 | `./gradlew assembleDebug` | ✅ BUILD SUCCESSFUL (486 tasks) |
 | Debug APK created | ✅ `android/app/build/outputs/apk/debug/app-debug.apk` |
+
+---
+
+## TASK 6 — GPS Speed Accuracy Fix + cnrad.dev-Inspired Background + Liquid Glass Icons
+
+### Status: IN PROGRESS
+
+### Changes About to Be Made:
+
+#### Part A: GPS Speed Accuracy Fixes
+1. **KalmanFilter.ts** — Adjust default noise parameters
+   - Increase processNoise: 0.008 → 0.1
+   - Decrease measurementNoise: 0.5 → 0.3
+
+2. **SpeedEngine.ts** — Add stationary detection and GPS accuracy gating
+   - Add GPS accuracy gating (skip readings with accuracy > 20m)
+   - Add SPEED_DEAD_ZONE = 0.5 m/s to eliminate GPS jitter
+   - Add stationary detection counter (3 consecutive low readings = force to 0)
+   - Add speed confidence check (cross-check GPS speed vs Haversine)
+   - Update reset() to include stationaryCount
+
+3. **GPSService.ts** — Ensure optimal GPS config
+   - Verify distanceFilter is set to 0 (or very low)
+   - Ensure accuracy field is passed through
+
+#### Part B: cnrad.dev-Inspired Animated Background
+1. **AnimatedBackground.tsx** — Create new component
+   - Fixed full-screen overlay with animated sun rays
+   - Uses react-native-linear-gradient for gradient
+   - Uses react-native-reanimated for sway animation
+   - 3 animated bars rotating 28deg ↔ 31deg
+   - Opacity 0.15, fades in over 2 seconds
+
+2. **glassMorphism.ts** — Add new color constants
+   - rayColor, rayGradientStart, rayGradientEnd, backgroundOverlayOpacity
+
+3. **App.tsx** — Integrate AnimatedBackground component
