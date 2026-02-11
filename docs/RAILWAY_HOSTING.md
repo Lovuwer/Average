@@ -74,11 +74,12 @@ Add each of the following:
 | `JWT_SECRET` | *(generate one — see below)* | Must be a strong random string, min 32 chars |
 | `JWT_ACCESS_EXPIRY` | `15m` | Access token lifetime |
 | `JWT_REFRESH_EXPIRY` | `7d` | Refresh token lifetime |
-| `PORT` | `3000` | Railway also injects `$PORT` automatically |
 | `HOST` | `0.0.0.0` | Required for Railway to route traffic |
 | `CORS_ORIGIN` | `*` | Or restrict to your domain for production |
 | `ADMIN_EMAIL` | `your-email@example.com` | The email you'll use to log in from the app |
 | `ADMIN_PASSWORD_HASH` | *(bcrypt hash — see Step 5)* | Hashed version of your password |
+
+> **Note**: Do NOT set a `PORT` environment variable. Railway automatically injects its own `PORT` variable (usually 8080 or other values), and the backend code will use it. Setting your own `PORT` can cause conflicts and 502 errors.
 
 ### Generate a JWT Secret
 

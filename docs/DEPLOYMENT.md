@@ -22,12 +22,12 @@
    JWT_SECRET=<generate: openssl rand -base64 32>
    JWT_ACCESS_EXPIRY=15m
    JWT_REFRESH_EXPIRY=7d
-   PORT=3000
    HOST=0.0.0.0
    CORS_ORIGIN=*
    ADMIN_EMAIL=your-email@example.com
    ADMIN_PASSWORD_HASH=<generate bcrypt hash — see docs/RAILWAY_HOSTING.md Step 5>
    ```
+   **Note**: Do NOT set `PORT` — Railway automatically injects it.
 5. **Deploy**: Railway auto-detects the Dockerfile and deploys
 6. **Verify**: Hit `https://<your-app>.railway.app/health`
 
@@ -102,8 +102,9 @@ xcodebuild -workspace Average.xcworkspace -scheme Average -configuration Release
 | `JWT_SECRET` | JWT signing secret | Required |
 | `JWT_ACCESS_EXPIRY` | Access token lifetime | `15m` |
 | `JWT_REFRESH_EXPIRY` | Refresh token lifetime | `7d` |
-| `PORT` | Server port | `3000` |
 | `HOST` | Server host | `0.0.0.0` |
 | `CORS_ORIGIN` | CORS allowed origins | `*` |
 | `ADMIN_EMAIL` | Single-user login email | Required |
 | `ADMIN_PASSWORD_HASH` | Bcrypt hash of admin password | Required |
+
+**Note**: When deploying to Railway, do NOT set `PORT` — Railway automatically injects it (usually 8080). The server code reads from `process.env.PORT` with a fallback to `3000` for local development.
