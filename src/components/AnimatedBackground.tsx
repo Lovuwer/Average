@@ -23,7 +23,7 @@ import Animated, {
   withRepeat,
   Easing,
 } from 'react-native-reanimated';
-import { COLORS } from '../theme/glassMorphism';
+import { COLORS, ANIMATION } from '../theme/glassMorphism';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -31,10 +31,9 @@ interface RayBarProps {
   top: number;
   height: number;
   duration: number;
-  delay?: number;
 }
 
-const RayBar: React.FC<RayBarProps> = ({ top, height, duration, delay = 0 }) => {
+const RayBar: React.FC<RayBarProps> = ({ top, height, duration }) => {
   const rotation = useSharedValue(28);
 
   useEffect(() => {
@@ -74,7 +73,7 @@ const AnimatedBackground: React.FC = () => {
 
   useEffect(() => {
     // Fade in the background over 2 seconds
-    opacity.value = withTiming(COLORS.backgroundOverlayOpacity as unknown as number, {
+    opacity.value = withTiming(ANIMATION.backgroundOverlayOpacity, {
       duration: 2000,
       easing: Easing.out(Easing.ease),
     });
@@ -96,8 +95,8 @@ const AnimatedBackground: React.FC = () => {
       >
         {/* 3 animated ray bars with different sizes and animation timings */}
         <RayBar top={20} height={40} duration={6} />
-        <RayBar top={40} height={60} duration={7} delay={0.5} />
-        <RayBar top={60} height={80} duration={8} delay={1} />
+        <RayBar top={40} height={60} duration={7} />
+        <RayBar top={60} height={80} duration={8} />
       </LinearGradient>
     </Animated.View>
   );

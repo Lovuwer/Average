@@ -25,6 +25,9 @@ export const COLORS = {
   rayColor: 'rgba(255,255,255,0.03)',
   rayGradientStart: 'rgba(255,255,255,0.04)',
   rayGradientEnd: '#0A0A0A',
+};
+
+export const ANIMATION = {
   backgroundOverlayOpacity: 0.15,
 };
 
